@@ -55,9 +55,9 @@ static gboolean fprint_load_print_data(Fprint *fprint, guint32 device_id,
 static gboolean fprint_unload_print_data(Fprint *fprint, guint32 device_id,
 	guint32 print_id, GError **error);
 static gboolean fprint_claim_device(Fprint *fprint, guint32 device_id,
-	GError **error);
+	DBusGMethodInvocation *minv);
 static gboolean fprint_release_device(Fprint *fprint, guint32 device_id,
-	GError **error);
+	DBusGMethodInvocation *minv);
 static gboolean fprint_verify_start(Fprint *fprint, guint32 device_id,
 	guint32 finger, GError **error);
 static gboolean fprint_get_verify_result(Fprint *fprint, guint32 device_id,
@@ -76,6 +76,7 @@ typedef enum {
 	FPRINT_ERROR_PRINT_NOT_FOUND,
 	FPRINT_ERROR_PRINT_LOAD,
 	FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
+	FPRINT_ERROR_CLAIM_DEVICE,
 	FPRINT_ERROR_VERIFY_START,
 	FPRINT_ERROR_VERIFY_STOP,
 	FPRINT_ERROR_FAILED,
@@ -94,6 +95,12 @@ struct loaded_print {
 struct session_data {
 	/* a list of pending verify results to be returned via GetVerifyResult() */
 	GList *verify_results;
+
+	/* method invocation for async ClaimDevice() */
+	DBusGMethodInvocation *minv_claim_device;
+
+	/* method invocation for async ReleaseDevice() */
+	DBusGMethodInvocation *minv_release_device;
 
 	/* method invocation for async GetVerifyResult() */
 	DBusGMethodInvocation *minv_get_verify_result;
@@ -181,40 +188,85 @@ out:
 	return TRUE;
 }
 
+static void dev_open_cb(struct fp_dev *dev, int status, void *user_data)
+{
+	struct registered_dev *rdev = user_data;
+	struct session_data *session = rdev->session;
+
+	g_message("device %d claim status %d", rdev->id, status);
+
+	if (status != 0) {
+		GError *error;
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
+			"Open failed with error %d", status);
+		dbus_g_method_return_error(session->minv_claim_device, error);
+		return;
+	}
+
+	rdev->dev = dev;
+	dbus_g_method_return(session->minv_claim_device);
+}
+
 static gboolean fprint_claim_device(Fprint *fprint, guint32 device_id,
-	GError **error)
+	DBusGMethodInvocation *minv)
 {
 	struct registered_dev *rdev = find_rdev_by_id(device_id);
+	GError *error = NULL;
+	int r;
+
+	g_message("claiming device %d", device_id);
+
 	if (!rdev) {
-		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_DEVICE,
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_DEVICE,
 			"No such device %d", device_id);
+		dbus_g_method_return_error(minv, error);
 		return FALSE;
 	}
 
-	/* FIXME async? */
-	/* FIXME more error checking */
-	rdev->dev = fp_dev_open(rdev->ddev);
 	rdev->session = g_slice_new0(struct session_data);
-	g_message("claimed device %d", device_id);
+	rdev->session->minv_claim_device = minv;
+
+	r = fp_async_dev_open(rdev->ddev, dev_open_cb, rdev);
+	if (r < 0) {
+		g_slice_free(struct session_data, rdev->session);
+		rdev->session = NULL;
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
+			"Could not attempt device open, error %d", r);
+		dbus_g_method_return_error(minv, error);
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
+static void dev_close_cb(struct fp_dev *dev, void *user_data)
+{
+	struct registered_dev *rdev = user_data;
+	struct session_data *session = rdev->session;
+	DBusGMethodInvocation *minv = session->minv_release_device;
+
+	rdev->dev = NULL;
+	g_slice_free(struct session_data, session);
+	rdev->session = NULL;
+
+	g_message("released device %d", rdev->id);
+	dbus_g_method_return(minv);
+}
+
 static gboolean fprint_release_device(Fprint *fprint, guint32 device_id,
-	GError **error)
+	DBusGMethodInvocation *minv)
 {
 	struct registered_dev *rdev = find_rdev_by_id(device_id);
 	struct session_data *session;
+	GError *error = NULL;
 	GSList *elem;
 
 	if (!rdev) {
-		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_DEVICE,
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_DEVICE,
 			"No such device %d", device_id);
+		dbus_g_method_return_error(minv, error);
 		return FALSE;
 	}
-
-	/* FIXME make async? */
-	fp_dev_close(rdev->dev);
-	rdev->dev = NULL;
 
 	/* Unload any loaded prints */
 	session = rdev->session;
@@ -227,9 +279,8 @@ static gboolean fprint_release_device(Fprint *fprint, guint32 device_id,
 		g_slist_free(session->loaded_prints);
 	}
 
-	g_slice_free(struct session_data, rdev->session);
-	rdev->session = NULL;
-	g_message("released device %d", device_id);
+	session->minv_release_device = minv;
+	fp_async_dev_close(rdev->dev, dev_close_cb, rdev);
 	return TRUE;
 }
 

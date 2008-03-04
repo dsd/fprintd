@@ -11,10 +11,12 @@
 		</method>
 
 		<method name="ClaimDevice">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 			<arg type="u" name="device_id" direction="in" />
 		</method>
 
 		<method name="ReleaseDevice">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 			<arg type="u" name="device_id" direction="in" />
 		</method>
 
