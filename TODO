@@ -1,0 +1,13 @@
+Enrollment
+Identification
+Image transfer
+Imaging
+Automatically ReleaseDevice when application disconnects from bus
+Rethink print handling - we discover on ListEnrolled and rediscover on each LoadPrintData
+
+Enforce command sequences:
+ force VerifyStop after non-retry verify result comes in
+ only allow GetVerifyResult during a verification
+ only allow VerifyStop during a verification
+ etc
+

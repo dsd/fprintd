@@ -1,0 +1,17 @@
+Makefile.in
+Makefile
+aclocal.m4
+compile
+autom4te.cache
+configure
+depcomp
+install-sh
+missing
+config.log
+config.status
+.deps
+client-bindings.h
+server-bindings.h
+demo
+*.o
+fprintd

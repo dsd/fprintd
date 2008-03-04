@@ -1,0 +1,12 @@
+fprintd
+=======
+
+http://www.reactivated.net/fprint/wiki/Fprintd
+
+Daemon to offer libfprint functionality over D-Bus
+Currently in early stages. Might eat your kangaroo.
+
+Written in C. Requires bleeding edge libfprint (libusb-1.0 port).
+
+Licensed under the GPL version 2 (see COPYING).
+
