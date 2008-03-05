@@ -19,9 +19,10 @@
 
 #include <stdlib.h>
 #include <dbus/dbus-glib-bindings.h>
-#include "client-bindings.h"
+#include "manager-dbus-glue.h"
+#include "device-dbus-glue.h"
 
-static DBusGProxy *proxy = NULL;
+static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
 
 enum fp_verify_result {
@@ -94,7 +95,7 @@ static const char *fingerstr(guint32 fingernum)
 	}
 }
 
-static void create_proxy(void)
+static void create_manager(void)
 {
 	GError *error = NULL;
 
@@ -102,49 +103,51 @@ static void create_proxy(void)
 	if (connection == NULL)
 		g_error("Failed to connect to session bus: %s", error->message);
 
-	proxy = dbus_g_proxy_new_for_name_owner(connection,
-		"net.reactivated.Fprint", "/net/reactivated/Fprint",
-		"net.reactivated.Fprint", &error);
-	if (proxy == NULL)
+	manager = dbus_g_proxy_new_for_name_owner(connection,
+		"net.reactivated.Fprint", "/net/reactivated/Fprint/Manager",
+		"net.reactivated.Fprint.Manager", &error);
+	if (manager == NULL)
 		g_error("Failed to create proxy: %s", error->message);
 }
 
-static guint32 open_device(void)
+static DBusGProxy *open_device(void)
 {
 	GError *error = NULL;
-	GArray *device_ids;
-	char **drvnames;
-	char **fullnames;
+	GPtrArray *devices;
+	gchar *path;
+	DBusGProxy *dev;
 	guint i;
-	guint32 device_id;
 
-	if (!net_reactivated_Fprint_list_devices(proxy, &device_ids, &drvnames,
-			&fullnames, &error))
+	if (!net_reactivated_Fprint_Manager_get_devices(manager, &devices, &error))
 		g_error("list_devices failed: %s", error->message);
 	
-	if (device_ids->len == 0) {
+	if (devices->len == 0) {
 		g_print("No devices found\n");
 		exit(1);
 	}
 
-	g_print("found %d devices\n", device_ids->len);
-	for (i = 0; i < device_ids->len; i++) {
-		g_print("Device #%d: %s (%s)\n", g_array_index(device_ids, guint32, i),
-			fullnames[i], drvnames[i]);
+	g_print("found %d devices\n", devices->len);
+	for (i = 0; i < devices->len; i++) {
+		path = g_ptr_array_index(devices, i);
+		g_print("Device at %s\n", path);
 	}
 
-	device_id = g_array_index(device_ids, int, 0);
-	g_strfreev(drvnames);
-	g_strfreev(fullnames);
-	g_array_free(device_ids, TRUE);
+	path = g_ptr_array_index(devices, 0);
+	g_print("Using device %s\n", path);
 
-	g_print("using device #%d\n", device_id);
-	if (!net_reactivated_Fprint_claim_device(proxy, device_id, &error))
+	/* FIXME use for_name_owner?? */
+	dev = dbus_g_proxy_new_for_name(connection, "net.reactivated.Fprint",
+		path, "net.reactivated.Fprint.Device");
+	
+	g_ptr_array_foreach(devices, (GFunc) g_free, NULL);
+	g_ptr_array_free(devices, TRUE);
+
+	if (!net_reactivated_Fprint_Device_claim(dev, &error))
 		g_error("failed to claim device: %s", error->message);
-	return device_id;
+	return dev;
 }
 
-static guint32 find_finger(guint32 device_id)
+static guint32 find_finger(DBusGProxy *dev)
 {
 	GError *error = NULL;
 	GArray *fingers;
@@ -152,7 +155,7 @@ static guint32 find_finger(guint32 device_id)
 	int fingernum;
 	guint32 print_id;
 
-	if (!net_reactivated_Fprint_list_enrolled_fingers(proxy, 0, &fingers, &error))
+	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, &fingers, &error))
 		g_error("ListEnrolledFingers failed: %s", error->message);
 
 	if (fingers->len == 0) {
@@ -170,64 +173,64 @@ static guint32 find_finger(guint32 device_id)
 	g_array_free(fingers, TRUE);
 
 	g_print("Verifying: %s\n", fingerstr(fingernum));
-	if (!net_reactivated_Fprint_load_print_data(proxy, device_id, fingernum, &print_id, &error))
+	if (!net_reactivated_Fprint_Device_load_print_data(dev, fingernum, &print_id, &error))
 		g_error("LoadPrintData failed: %s", error->message);
 
 	return print_id;
 }
 
-static int do_verify(guint32 device_id, guint32 print_id)
+static int do_verify(DBusGProxy *dev, guint32 print_id)
 {
 	GError *error;
 	gboolean more_results;
 	int result;
 
-	if (!net_reactivated_Fprint_verify_start(proxy, device_id, print_id, &error))
+	if (!net_reactivated_Fprint_Device_verify_start(dev, print_id, &error))
 		g_error("VerifyStart failed: %s", error->message);
 
 	do {
-		if (!net_reactivated_Fprint_get_verify_result(proxy, device_id, &result, &more_results, &error))
+		if (!net_reactivated_Fprint_Device_get_verify_result(dev, &result, &more_results, &error))
 			g_error("GetVerifyResult failed: %s", error->message);
 
 		g_print("Verify result: %s (%d)\n", verify_result_str(result), result);
 	} while (result != VERIFY_NO_MATCH && result != VERIFY_MATCH);
 
-	if (!net_reactivated_Fprint_verify_stop(proxy, device_id, &error))
+	if (!net_reactivated_Fprint_Device_verify_stop(dev, &error))
 		g_error("VerifyStop failed: %s", error->message);
 
 	return result;
 }
 
-static void unload_print(guint32 device_id, guint32 print_id)
+static void unload_print(DBusGProxy *dev, guint32 print_id)
 {
 	GError *error = NULL;
-	if (!net_reactivated_Fprint_unload_print_data(proxy, device_id, print_id, &error))
+	if (!net_reactivated_Fprint_Device_unload_print_data(dev, print_id, &error))
 		g_error("UnloadPrint failed: %s", error->message);
 }
 
-static void release_device(guint32 device_id)
+static void release_device(DBusGProxy *dev)
 {
 	GError *error = NULL;
-	if (!net_reactivated_Fprint_release_device(proxy, device_id, &error))
+	if (!net_reactivated_Fprint_Device_release(dev, &error))
 		g_error("ReleaseDevice failed: %s", error->message);
 }
 
 int main(int argc, char **argv)
 {
 	GMainLoop *loop;
-	guint32 device_id;
+	DBusGProxy *dev;
 	guint32 print_id;
 	int verify_result;
 
 	g_type_init();
 	loop = g_main_loop_new(NULL, FALSE);
-	create_proxy();
+	create_manager();
 
-	device_id = open_device();
-	print_id = find_finger(device_id);
-	verify_result = do_verify(device_id, print_id);
-	unload_print(device_id, print_id);
-	release_device(device_id);
+	dev = open_device();
+	print_id = find_finger(dev);
+	verify_result = do_verify(dev, print_id);
+	unload_print(dev, print_id);
+	release_device(dev);
 	return 0;
 }
 

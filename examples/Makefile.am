@@ -1,4 +1,4 @@
-BUILT_SOURCES = client-bindings.h
+BUILT_SOURCES = manager-dbus-glue.h device-dbus-glue.h
 noinst_HEADERS = $(BUILT_SOURCES)
 CLEANFILES = $(BUILT_SOURCES)
 
@@ -8,7 +8,9 @@ demo_SOURCES = demo.c
 demo_CFLAGS = $(AM_CFLAGS) $(DBUS_GLIB_CFLAGS)
 demo_LDADD = $(DBUS_GLIB_LIBS)
 
-client-bindings.h: ../src/fprintd.xml
-	dbus-binding-tool --prefix=fprint --mode=glib-client $< --output=$@
+manager-dbus-glue.h: ../src/manager.xml
+	dbus-binding-tool --prefix=fprint_manager --mode=glib-client $< --output=$@
 
+device-dbus-glue.h: ../src/device.xml
+	dbus-binding-tool --prefix=fprint_device --mode=glib-client $< --output=$@
 

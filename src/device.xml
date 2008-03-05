@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<node name="/">
+	<interface name="net.reactivated.Fprint.Device">
+		<annotation name="org.freedesktop.DBus.GLib.CSymbol"
+			value="fprint_device" />
+
+		<method name="Claim">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
+		<method name="Release">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
+		<method name="ListEnrolledFingers">
+			<arg type="au" name="enrolled_fingers" direction="out" />
+		</method>
+
+		<!-- FIXME make OO -->
+		<method name="LoadPrintData">
+			<arg type="u" name="finger_num" direction="in" />
+			<arg type="u" name="print_id" direction="out" />
+		</method>
+
+		<method name="UnloadPrintData">
+			<arg type="u" name="print_id" direction="in" />
+		</method>
+
+		<method name="VerifyStart">
+			<arg type="u" name="print_id" direction="in" />
+		</method>
+
+		<method name="VerifyStop">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
+		<method name="GetVerifyResult">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+			<arg type="i" name="result" direction="out" />
+			<arg type="b" name="more_results" direction="out" />
+		</method>
+
+		<!-- FIXME replace GetVerifyResult with this signal
+		<signal name="VerifyResult">
+			<arg type="i" name="result" />
+		</signal> -->
+
+	</interface>
+</node>
+

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<node name="/">
+	<interface name="net.reactivated.Fprint.Manager">
+		<annotation name="org.freedesktop.DBus.GLib.CSymbol"
+			value="fprint_manager" />
+
+		<method name="GetDevices">
+			<arg type="ao" name="devices" direction="out" />
+		</method>
+
+	</interface>
+</node>
+
