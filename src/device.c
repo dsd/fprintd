@@ -38,31 +38,18 @@ static gboolean fprint_device_verify_start(FprintDevice *rdev,
 	guint32 print_id, GError **error);
 static gboolean fprint_device_verify_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
-static gboolean fprint_device_get_verify_result(FprintDevice *rdev,
-	DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
 struct session_data {
-	/* a list of pending verify results to be returned via GetVerifyResult() */
-	GList *verify_results;
-
 	/* method invocation for async ClaimDevice() */
 	DBusGMethodInvocation *context_claim_device;
 
 	/* method invocation for async ReleaseDevice() */
 	DBusGMethodInvocation *context_release_device;
 
-	/* method invocation for async GetVerifyResult() */
-	DBusGMethodInvocation *context_get_verify_result;
-
 	/* a list of loaded prints */
 	GSList *loaded_prints;
-};
-
-struct verify_result {
-	int result;
-	struct fp_img *img;
 };
 
 struct loaded_print {
@@ -85,8 +72,14 @@ enum fprint_device_properties {
 	FPRINT_DEVICE_CONSTRUCT_DDEV = 1,
 };
 
+enum fprint_device_signals {
+	SIGNAL_VERIFY_RESULT,
+	NUM_SIGNALS,
+};
+
 static GObjectClass *parent_class = NULL;
 static guint32 last_id = ~0;
+static guint signals[NUM_SIGNALS] = { 0, };
 
 static void device_finalize(GObject *object)
 {
@@ -120,6 +113,7 @@ static void device_class_init(FprintDeviceClass *klass)
 
 	gobject_class->finalize = device_finalize;
 	gobject_class->set_property = device_set_property;
+	g_type_class_add_private(klass, sizeof(FprintDevicePrivate));
 
 	pspec = g_param_spec_pointer("discovered-dev", "Discovered device",
 		"Set discovered device construction property",
@@ -127,7 +121,9 @@ static void device_class_init(FprintDeviceClass *klass)
 	g_object_class_install_property(gobject_class,
 		FPRINT_DEVICE_CONSTRUCT_DDEV, pspec);
 
-	g_type_class_add_private(klass, sizeof(FprintDevicePrivate));
+	signals[SIGNAL_VERIFY_RESULT] = g_signal_new("verify-result",
+		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 }
 
 static void device_init(GTypeInstance *instance, gpointer g_class)
@@ -359,25 +355,10 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 	void *user_data)
 {
 	struct FprintDevice *rdev = user_data;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-	struct session_data *session = priv->session;
 	g_message("verify_cb: result %d", r);
 
-	if (session->context_get_verify_result) {
-		/* if we have an app waiting on a verify result, report it
-		 * immediately */
-		dbus_g_method_return(session->context_get_verify_result, r, FALSE);
-		fp_img_free(img);
-		session->context_get_verify_result = NULL;
-	} else {
-		/* otherwise nobody is listening. add it to the queue of pending
-		 * results */
-		struct verify_result *result = g_slice_new(struct verify_result);
-		result->result = r;
-		result->img = img;
-		session->verify_results = g_list_append(session->verify_results,
-			result);
-	}
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_RESULT], 0, r);
+	fp_img_free(img);
 }
 
 static gboolean fprint_device_verify_start(FprintDevice *rdev,
@@ -421,32 +402,6 @@ static gboolean fprint_device_verify_start(FprintDevice *rdev,
 	return TRUE;
 }
 
-static gboolean fprint_device_get_verify_result(FprintDevice *rdev,
-	DBusGMethodInvocation *context)
-{
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-	struct session_data *session = priv->session;
-	GList *elem = session->verify_results;
-
-	if (elem == NULL) {
-		/* no pending results, asynchronously wait for the next one */
-		session->context_get_verify_result = context;
-		g_message("get_verify_result: none pending, waiting for next one");
-	} else {
-		struct verify_result *result = elem->data;
-		gboolean has_next = (g_list_next(elem) != NULL);
-		g_message("GetVerifyResult: returning pending result %d",
-			result->result);
-		dbus_g_method_return(context, result->result, has_next);
-		fp_img_free(result->img);
-		session->verify_results = g_list_delete_link(session->verify_results,
-			elem);
-		g_slice_free(struct verify_result, result);
-	}
-
-	return TRUE;
-}
-
 static void verify_stop_cb(struct fp_dev *dev, void *user_data)
 {
 	dbus_g_method_return((DBusGMethodInvocation *) user_data);
@@ -456,20 +411,7 @@ static gboolean fprint_device_verify_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-	struct session_data *session = priv->session;
-	GList *elem = session->verify_results;
 	int r;
-
-	/* Free all unreaped verify results */
-	if (elem) {
-		do {
-			struct verify_result *result = elem->data;
-			fp_img_free(result->img);
-			g_slice_free(struct verify_result, result);
-		} while ((elem = g_list_next(elem)) != NULL);
-		g_list_free(session->verify_results);
-		session->verify_results = NULL;
-	}
 
 	r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
 	if (r < 0) {

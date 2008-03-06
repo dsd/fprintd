@@ -179,26 +179,33 @@ static guint32 find_finger(DBusGProxy *dev)
 	return print_id;
 }
 
-static int do_verify(DBusGProxy *dev, guint32 print_id)
+static void verify_result(GObject *object, int result, void *user_data)
+{
+	gboolean *verify_completed = user_data;
+	g_print("Verify result: %s (%d)\n", verify_result_str(result), result);
+	if (result == VERIFY_NO_MATCH || result == VERIFY_MATCH)
+		*verify_completed = TRUE;
+}
+
+static void do_verify(DBusGProxy *dev, guint32 print_id)
 {
 	GError *error;
-	gboolean more_results;
-	int result;
+	gboolean verify_completed = FALSE;
+
+	dbus_g_proxy_add_signal(dev, "VerifyResult", G_TYPE_INT, NULL);
+	dbus_g_proxy_connect_signal(dev, "VerifyResult", G_CALLBACK(verify_result),
+		&verify_completed, NULL);
 
 	if (!net_reactivated_Fprint_Device_verify_start(dev, print_id, &error))
 		g_error("VerifyStart failed: %s", error->message);
 
-	do {
-		if (!net_reactivated_Fprint_Device_get_verify_result(dev, &result, &more_results, &error))
-			g_error("GetVerifyResult failed: %s", error->message);
+	while (!verify_completed)
+		g_main_context_iteration(NULL, TRUE);
 
-		g_print("Verify result: %s (%d)\n", verify_result_str(result), result);
-	} while (result != VERIFY_NO_MATCH && result != VERIFY_MATCH);
+	dbus_g_proxy_disconnect_signal(dev, "VerifyResult", G_CALLBACK(verify_result), &verify_completed);
 
 	if (!net_reactivated_Fprint_Device_verify_stop(dev, &error))
 		g_error("VerifyStop failed: %s", error->message);
-
-	return result;
 }
 
 static void unload_print(DBusGProxy *dev, guint32 print_id)
@@ -220,7 +227,6 @@ int main(int argc, char **argv)
 	GMainLoop *loop;
 	DBusGProxy *dev;
 	guint32 print_id;
-	int verify_result;
 
 	g_type_init();
 	loop = g_main_loop_new(NULL, FALSE);
@@ -228,7 +234,7 @@ int main(int argc, char **argv)
 
 	dev = open_device();
 	print_id = find_finger(dev);
-	verify_result = do_verify(dev, print_id);
+	do_verify(dev, print_id);
 	unload_print(dev, print_id);
 	release_device(dev);
 	return 0;

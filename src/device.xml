@@ -34,16 +34,9 @@
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
-		<method name="GetVerifyResult">
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-			<arg type="i" name="result" direction="out" />
-			<arg type="b" name="more_results" direction="out" />
-		</method>
-
-		<!-- FIXME replace GetVerifyResult with this signal
 		<signal name="VerifyResult">
 			<arg type="i" name="result" />
-		</signal> -->
+		</signal>
 
 	</interface>
 </node>
