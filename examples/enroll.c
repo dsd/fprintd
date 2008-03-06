@@ -1,5 +1,5 @@
 /*
- * fprintd example to verify a fingerprint
+ * fprintd example to enroll right index finger
  * Copyright (C) 2008 Daniel Drake <dsd@gentoo.org>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,29 +25,32 @@
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
 
-enum fp_verify_result {
-	VERIFY_NO_MATCH = 0,
-	VERIFY_MATCH = 1,
-	VERIFY_RETRY = 100,
-	VERIFY_RETRY_TOO_SHORT = 101,
-	VERIFY_RETRY_CENTER_FINGER = 102,
-	VERIFY_RETRY_REMOVE_FINGER = 103,
+enum enroll_result {
+	ENROLL_COMPLETE = 1,
+	ENROLL_FAIL,
+	ENROLL_PASS,
+	ENROLL_RETRY = 100,
+	ENROLL_RETRY_TOO_SHORT = 101,
+	ENROLL_RETRY_CENTER_FINGER = 102,
+	ENROLL_RETRY_REMOVE_FINGER = 103,
 };
 
-static const char *verify_result_str(int result)
+static const char *enroll_result_str(int result)
 {
 	switch (result) {
-	case VERIFY_NO_MATCH:
-		return "No match";
-	case VERIFY_MATCH:
-		return "Match!";
-	case VERIFY_RETRY:
+	case ENROLL_COMPLETE:
+		return "Enroll completed.";
+	case ENROLL_FAIL:
+		return "Enroll failed :(";
+	case ENROLL_PASS:
+		return "Enroll stage passed. Please scan again for next stage.";
+	case ENROLL_RETRY:
 		return "Retry scan";
-	case VERIFY_RETRY_TOO_SHORT:
+	case ENROLL_RETRY_TOO_SHORT:
 		return "Swipe too short, please retry";
-	case VERIFY_RETRY_CENTER_FINGER:
+	case ENROLL_RETRY_CENTER_FINGER:
 		return "Finger not centered, please retry";
-	case VERIFY_RETRY_REMOVE_FINGER:
+	case ENROLL_RETRY_REMOVE_FINGER:
 		return "Please remove finger and retry";
 	default:
 		return "Unknown";
@@ -66,34 +69,6 @@ enum fp_finger {
 	RIGHT_RING, /** ring finger (right hand) */
 	RIGHT_LITTLE, /** little finger (right hand) */
 };
-
-static const char *fingerstr(guint32 fingernum)
-{
-	switch (fingernum) {
-	case LEFT_THUMB:
-		return "Left thumb";
-	case LEFT_INDEX:
-		return "Left index finger";
-	case LEFT_MIDDLE:
-		return "Left middle finger";
-	case LEFT_RING:
-		return "Left ring finger";
-	case LEFT_LITTLE:
-		return "Left little finger";
-	case RIGHT_THUMB:
-		return "Right thumb";
-	case RIGHT_INDEX:
-		return "Right index finger";
-	case RIGHT_MIDDLE:
-		return "Right middle finger";
-	case RIGHT_RING:
-		return "Right ring finger";
-	case RIGHT_LITTLE:
-		return "Right little finger";
-	default:
-		return "Unknown finger";
-	}
-}
 
 static void create_manager(void)
 {
@@ -138,7 +113,7 @@ static DBusGProxy *open_device(void)
 	/* FIXME use for_name_owner?? */
 	dev = dbus_g_proxy_new_for_name(connection, "net.reactivated.Fprint",
 		path, "net.reactivated.Fprint.Device");
-	
+
 	g_ptr_array_foreach(devices, (GFunc) g_free, NULL);
 	g_ptr_array_free(devices, TRUE);
 
@@ -147,72 +122,35 @@ static DBusGProxy *open_device(void)
 	return dev;
 }
 
-static guint32 find_finger(DBusGProxy *dev)
+static void enroll_result(GObject *object, int result, void *user_data)
 {
-	GError *error = NULL;
-	GArray *fingers;
-	guint i;
-	int fingernum;
-	guint32 print_id;
-
-	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, &fingers, &error))
-		g_error("ListEnrolledFingers failed: %s", error->message);
-
-	if (fingers->len == 0) {
-		g_print("No fingers enrolled for this device.\n");
-		exit(1);
-	}
-
-	g_print("Listing enrolled fingers:\n");
-	for (i = 0; i < fingers->len; i++) {
-		fingernum = g_array_index(fingers, guint32, i);
-		g_print(" - #%d: %s\n", fingernum, fingerstr(fingernum));
-	}
-
-	fingernum = g_array_index(fingers, guint32, 0);
-	g_array_free(fingers, TRUE);
-
-	g_print("Verifying: %s\n", fingerstr(fingernum));
-	if (!net_reactivated_Fprint_Device_load_print_data(dev, fingernum, &print_id, &error))
-		g_error("LoadPrintData failed: %s", error->message);
-
-	return print_id;
+	gboolean *enroll_completed = user_data;
+	g_print("Enroll result: %s (%d)\n", enroll_result_str(result), result);
+	if (result == ENROLL_COMPLETE || result == ENROLL_FAIL)
+		*enroll_completed = TRUE;
 }
 
-static void verify_result(GObject *object, int result, void *user_data)
-{
-	gboolean *verify_completed = user_data;
-	g_print("Verify result: %s (%d)\n", verify_result_str(result), result);
-	if (result == VERIFY_NO_MATCH || result == VERIFY_MATCH)
-		*verify_completed = TRUE;
-}
-
-static void do_verify(DBusGProxy *dev, guint32 print_id)
+static void do_enroll(DBusGProxy *dev)
 {
 	GError *error;
-	gboolean verify_completed = FALSE;
+	gboolean enroll_completed = FALSE;
 
-	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_INT, NULL);
-	dbus_g_proxy_connect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result),
-		&verify_completed, NULL);
+	dbus_g_proxy_add_signal(dev, "EnrollStatus", G_TYPE_INT, NULL);
+	dbus_g_proxy_connect_signal(dev, "EnrollStatus", G_CALLBACK(enroll_result),
+		&enroll_completed, NULL);
 
-	if (!net_reactivated_Fprint_Device_verify_start(dev, print_id, &error))
-		g_error("VerifyStart failed: %s", error->message);
+	g_print("Enrolling right index finger.\n");
+	if (!net_reactivated_Fprint_Device_enroll_start(dev, RIGHT_INDEX, &error))
+		g_error("EnrollStart failed: %s", error->message);
 
-	while (!verify_completed)
+	while (!enroll_completed)
 		g_main_context_iteration(NULL, TRUE);
 
-	dbus_g_proxy_disconnect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result), &verify_completed);
+	dbus_g_proxy_disconnect_signal(dev, "EnrollStatus",
+		G_CALLBACK(enroll_result), &enroll_completed);
 
-	if (!net_reactivated_Fprint_Device_verify_stop(dev, &error))
+	if (!net_reactivated_Fprint_Device_enroll_stop(dev, &error))
 		g_error("VerifyStop failed: %s", error->message);
-}
-
-static void unload_print(DBusGProxy *dev, guint32 print_id)
-{
-	GError *error = NULL;
-	if (!net_reactivated_Fprint_Device_unload_print_data(dev, print_id, &error))
-		g_error("UnloadPrint failed: %s", error->message);
 }
 
 static void release_device(DBusGProxy *dev)
@@ -226,16 +164,13 @@ int main(int argc, char **argv)
 {
 	GMainLoop *loop;
 	DBusGProxy *dev;
-	guint32 print_id;
 
 	g_type_init();
 	loop = g_main_loop_new(NULL, FALSE);
 	create_manager();
 
 	dev = open_device();
-	print_id = find_finger(dev);
-	do_verify(dev, print_id);
-	unload_print(dev, print_id);
+	do_enroll(dev);
 	release_device(dev);
 	return 0;
 }

@@ -38,10 +38,17 @@ static gboolean fprint_device_verify_start(FprintDevice *rdev,
 	guint32 print_id, GError **error);
 static gboolean fprint_device_verify_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
+static gboolean fprint_device_enroll_start(FprintDevice *rdev,
+	guint32 finger_num, GError **error);
+static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
+	DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
 struct session_data {
+	/* finger being enrolled */
+	int enroll_finger;
+
 	/* method invocation for async ClaimDevice() */
 	DBusGMethodInvocation *context_claim_device;
 
@@ -73,7 +80,8 @@ enum fprint_device_properties {
 };
 
 enum fprint_device_signals {
-	SIGNAL_VERIFY_RESULT,
+	SIGNAL_VERIFY_STATUS,
+	SIGNAL_ENROLL_STATUS,
 	NUM_SIGNALS,
 };
 
@@ -121,7 +129,10 @@ static void device_class_init(FprintDeviceClass *klass)
 	g_object_class_install_property(gobject_class,
 		FPRINT_DEVICE_CONSTRUCT_DDEV, pspec);
 
-	signals[SIGNAL_VERIFY_RESULT] = g_signal_new("verify-result",
+	signals[SIGNAL_VERIFY_STATUS] = g_signal_new("verify-status",
+		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
+	signals[SIGNAL_ENROLL_STATUS] = g_signal_new("enroll-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
 		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 }
@@ -357,7 +368,7 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 	struct FprintDevice *rdev = user_data;
 	g_message("verify_cb: result %d", r);
 
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_RESULT], 0, r);
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, r);
 	fp_img_free(img);
 }
 
@@ -418,6 +429,65 @@ static gboolean fprint_device_verify_stop(FprintDevice *rdev,
 		GError *error;
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_STOP,
 			"Verify stop failed with error %d", r);
+		dbus_g_method_return_error(context, error);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void enroll_stage_cb(struct fp_dev *dev, int result,
+	struct fp_print_data *print, struct fp_img *img, void *user_data)
+{
+	struct FprintDevice *rdev = user_data;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	struct session_data *session = priv->session;
+
+	g_message("enroll_stage_cb: result %d", result);
+	if (result == FP_ENROLL_COMPLETE)
+		fp_print_data_save(print, session->enroll_finger);
+
+	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, result);
+	fp_img_free(img);
+	fp_print_data_free(print);
+}
+
+static gboolean fprint_device_enroll_start(FprintDevice *rdev,
+	guint32 finger_num, GError **error)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	struct session_data *session = priv->session;
+	int r;
+
+	g_message("start enrollment device %d finger %d", priv->id, finger_num);
+	session->enroll_finger = finger_num;
+	
+	r = fp_async_enroll_start(priv->dev, enroll_stage_cb, rdev);
+	if (r < 0) {
+		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_ENROLL_START,
+			"Enroll start failed with error %d", r);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void enroll_stop_cb(struct fp_dev *dev, void *user_data)
+{
+	dbus_g_method_return((DBusGMethodInvocation *) user_data);
+}
+
+static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
+	DBusGMethodInvocation *context)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	int r;
+
+	r = fp_async_enroll_stop(priv->dev, enroll_stop_cb, context);
+	if (r < 0) {
+		GError *error;
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ENROLL_STOP,
+			"Enroll stop failed with error %d", r);
 		dbus_g_method_return_error(context, error);
 		return FALSE;
 	}

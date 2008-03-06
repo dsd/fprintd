@@ -34,7 +34,19 @@
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
-		<signal name="VerifyResult">
+		<signal name="VerifyStatus">
+			<arg type="i" name="result" />
+		</signal>
+
+		<method name="EnrollStart">
+			<arg type="u" name="finger_num" direction="in" />
+		</method>
+
+		<method name="EnrollStop">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
+		<signal name="EnrollStatus">
 			<arg type="i" name="result" />
 		</signal>
 

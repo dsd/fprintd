@@ -13,6 +13,7 @@ config.status
 client-bindings.h
 *-dbus-glue.h
 demo
+enroll
 *.o
 fprintd
 *.swp
