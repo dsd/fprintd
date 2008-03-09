@@ -2,11 +2,11 @@ BUILT_SOURCES = manager-dbus-glue.h device-dbus-glue.h
 noinst_HEADERS = $(BUILT_SOURCES)
 CLEANFILES = $(BUILT_SOURCES)
 
-bin_PROGRAMS = demo enroll
+bin_PROGRAMS = verify enroll
 
-demo_SOURCES = demo.c
-demo_CFLAGS = $(AM_CFLAGS) $(DBUS_GLIB_CFLAGS)
-demo_LDADD = $(DBUS_GLIB_LIBS)
+verify_SOURCES = verify.c
+verify_CFLAGS = $(AM_CFLAGS) $(DBUS_GLIB_CFLAGS)
+verify_LDADD = $(DBUS_GLIB_LIBS)
 
 enroll_SOURCES = enroll.c
 enroll_CFLAGS = $(AM_CFLAGS) $(DBUS_GLIB_CFLAGS)

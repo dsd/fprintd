@@ -12,7 +12,7 @@ config.status
 .deps
 client-bindings.h
 *-dbus-glue.h
-demo
+verify
 enroll
 *.o
 fprintd
