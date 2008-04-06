@@ -6,7 +6,7 @@ EXTRA_DIST = fprintd.xml
 
 bin_PROGRAMS = fprintd
 
-fprintd_SOURCES = main.c manager.c device.c
+fprintd_SOURCES = main.c manager.c device.c file_storage.c
 fprintd_LDADD = $(GLIB_LIBS) $(DBUS_GLIB_LIBS) $(FPRINT_LIBS)
 fprintd_CFLAGS = $(AM_CFLAGS) $(GLIB_CFLAGS) $(DBUS_GLIB_CFLAGS) $(FPRINT_CFLAGS)
 

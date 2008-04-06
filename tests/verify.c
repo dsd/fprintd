@@ -17,6 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <dbus/dbus-glib-bindings.h>
 #include "manager-dbus-glue.h"
@@ -155,7 +156,7 @@ static guint32 find_finger(DBusGProxy *dev)
 	int fingernum;
 	guint32 print_id;
 
-	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, &fingers, &error))
+	if (!net_reactivated_Fprint_Device_list_enrolled_fingers_from_storage(dev, "anarsoul", &fingers, &error))
 		g_error("ListEnrolledFingers failed: %s", error->message);
 
 	if (fingers->len == 0) {
@@ -173,7 +174,7 @@ static guint32 find_finger(DBusGProxy *dev)
 	g_array_free(fingers, TRUE);
 
 	g_print("Verifying: %s\n", fingerstr(fingernum));
-	if (!net_reactivated_Fprint_Device_load_print_data(dev, fingernum, &print_id, &error))
+	if (!net_reactivated_Fprint_Device_load_print_data_from_storage(dev, fingernum, "anarsoul", &print_id, &error))
 		g_error("LoadPrintData failed: %s", error->message);
 
 	return print_id;

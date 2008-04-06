@@ -23,6 +23,7 @@
 #include <glib-object.h>
 
 #include "fprintd.h"
+#include "storage.h"
 
 static gboolean fprint_device_claim(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
@@ -42,6 +43,13 @@ static gboolean fprint_device_enroll_start(FprintDevice *rdev,
 	guint32 finger_num, GError **error);
 static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
+static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
+	gint type);
+static gboolean fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev, 
+	gchar *username, GArray **fingers, GError **error);
+static gboolean fprint_device_load_print_data_from_storage(FprintDevice *rdev,
+	guint32 finger_num, gchar *username, guint32 *print_id, GError **error);
+
 
 #include "device-dbus-glue.h"
 
@@ -57,6 +65,7 @@ struct session_data {
 
 	/* a list of loaded prints */
 	GSList *loaded_prints;
+
 };
 
 struct loaded_print {
@@ -69,6 +78,9 @@ struct FprintDevicePrivate {
 	struct fp_dscv_dev *ddev;
 	struct fp_dev *dev;
 	struct session_data *session;
+
+	/* type of storage */
+	int storage_type;
 };
 
 typedef struct FprintDevicePrivate FprintDevicePrivate;
@@ -142,6 +154,8 @@ static void device_init(GTypeInstance *instance, gpointer g_class)
 	FprintDevice *self = (FprintDevice *) instance;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
 	priv->id = ++last_id;
+	priv->storage_type = FP_FILE_STORAGE;
+	storages[priv->storage_type].init();
 }
 
 GType fprint_device_get_type(void)
@@ -492,6 +506,75 @@ static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
 		return FALSE;
 	}
 
+	return TRUE;
+}
+
+static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
+	gint type)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+
+	if (type >= FP_STORAGES_COUNT) return FALSE;
+
+	storages[priv->storage_type].deinit();
+	priv->storage_type = type;
+	storages[priv->storage_type].init();
+
+	return TRUE;
+}
+
+static gboolean fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev,
+	gchar *username, GArray **fingers, GError **error)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	GSList *prints;
+	GSList *item;
+	GArray *ret;
+
+	prints = storages[priv->storage_type].discover_prints(priv->dev, username);
+	if (!prints) {
+		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
+			"Failed to discover prints");
+		return FALSE;
+	}
+
+	ret = g_array_new(FALSE, FALSE, sizeof(int));
+	for (item = prints; item; item = item->next) {
+		int *fingerptr = (int *)item->data;
+		ret = g_array_append_val(ret, *fingerptr);
+	}
+
+	g_slist_free(prints);
+	*fingers = ret;
+	return TRUE;
+}
+
+static gboolean fprint_device_load_print_data_from_storage(FprintDevice *rdev,
+	guint32 finger_num, gchar *username, guint32 *print_id, GError **error)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	struct session_data *session = priv->session;
+	struct loaded_print *lprint;
+	struct fp_print_data *data;
+	int r;
+
+	r = storages[priv->storage_type].print_data_load(priv->dev, (enum fp_finger)finger_num, 
+		&data, (char *)username);
+
+	if (r < 0) {
+		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_PRINT_LOAD,
+			"Print load failed with error %d", r);
+		return FALSE;
+	}
+
+	lprint = g_slice_new(struct loaded_print);
+	lprint->data = data;
+	lprint->id = ++last_id;
+	session->loaded_prints = g_slist_prepend(session->loaded_prints, lprint);
+
+	g_message("load print data finger %d for device %d = %d",
+		finger_num, priv->id, lprint->id);
+	*print_id = lprint->id;
 	return TRUE;
 }
 

@@ -17,4 +17,3 @@ manager-dbus-glue.h: ../src/manager.xml
 
 device-dbus-glue.h: ../src/device.xml
 	dbus-binding-tool --prefix=fprint_device --mode=glib-client $< --output=$@
-

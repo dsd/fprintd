@@ -50,6 +50,21 @@
 			<arg type="i" name="result" />
 		</signal>
 
+		<method name="SetStorageType">
+			<arg type="u" name="storage_id" direction="in" />
+		</method>
+		
+		<method name="ListEnrolledFingersFromStorage">
+			<arg type="s" name="username" direction="in" />
+			<arg type="au" name="enrolled_fingers" direction="out" />
+		</method>
+
+		<method name="LoadPrintDataFromStorage">
+			<arg type="u" name="finger_num" direction="in" />
+			<arg type="u" name="print_id" direction="out" />
+			<arg type="s" name="username" direction="in" />
+		</method>
+
 	</interface>
 </node>
 
