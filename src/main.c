@@ -223,7 +223,7 @@ int main(int argc, char **argv)
 	g_print("Launching FprintObject\n");
 
 	/* Obtain a connection to the session bus */
-	fprintd_dbus_conn = dbus_g_bus_get(DBUS_BUS_SESSION, &error);
+	fprintd_dbus_conn = dbus_g_bus_get(DBUS_BUS_SYSTEM, &error);
 	if (fprintd_dbus_conn == NULL)
 		g_error("Failed to open connection to bus: %s", error->message);
 

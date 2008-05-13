@@ -100,15 +100,13 @@ static void create_manager(void)
 {
 	GError *error = NULL;
 
-	connection = dbus_g_bus_get(DBUS_BUS_SESSION, &error);
+	connection = dbus_g_bus_get(DBUS_BUS_SYSTEM, &error);
 	if (connection == NULL)
 		g_error("Failed to connect to session bus: %s", error->message);
 
-	manager = dbus_g_proxy_new_for_name_owner(connection,
+	manager = dbus_g_proxy_new_for_name(connection,
 		"net.reactivated.Fprint", "/net/reactivated/Fprint/Manager",
-		"net.reactivated.Fprint.Manager", &error);
-	if (manager == NULL)
-		g_error("Failed to create proxy: %s", error->message);
+		"net.reactivated.Fprint.Manager");
 }
 
 static DBusGProxy *open_device(void)
