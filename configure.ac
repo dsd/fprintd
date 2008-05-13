@@ -33,6 +33,6 @@ CFLAGS="$saved_cflags"
 AM_CFLAGS="-std=gnu99 $inline_cflags -Wall -Wundef -Wunused -Wstrict-prototypes -Werror-implicit-function-declaration -Wno-pointer-sign -Wshadow"
 AC_SUBST(AM_CFLAGS)
 
-AC_CONFIG_FILES([Makefile] [src/Makefile] [tests/Makefile])
+AC_CONFIG_FILES([Makefile] [src/Makefile] [data/Makefile] [tests/Makefile])
 AC_OUTPUT
 

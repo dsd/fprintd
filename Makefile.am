@@ -1,4 +1,4 @@
 AUTOMAKE_OPTIONS = dist-bzip2
-SUBDIRS = src tests
+SUBDIRS = src data tests
 EXTRA_DIST = TODO
 

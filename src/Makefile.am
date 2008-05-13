@@ -4,7 +4,7 @@ noinst_HEADERS = $(BUILT_SOURCES)
 CLEANFILES = $(BUILT_SOURCES)
 EXTRA_DIST = fprintd.xml
 
-bin_PROGRAMS = fprintd
+libexec_PROGRAMS = fprintd
 
 fprintd_SOURCES = main.c manager.c device.c file_storage.c
 fprintd_LDADD = $(GLIB_LIBS) $(DBUS_GLIB_LIBS) $(FPRINT_LIBS)

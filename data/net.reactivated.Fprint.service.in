@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=net.reactivated.Fprint
+Exec=@LIBEXECDIR@/fprintd
+User=root
