@@ -19,6 +19,7 @@
 
 #include <dbus/dbus-glib-bindings.h>
 #include <glib.h>
+#include <glib/gi18n.h>
 #include <libfprint/fprint.h>
 #include <glib-object.h>
 
@@ -79,7 +80,8 @@ fprint_manager_init (FprintManager *manager)
 	int i = 0;
 
 	if (!discovered_devs) {
-		priv->last_error = g_error_new (0, 0, "NO DEVICES AVAILABLE: FIXME");
+		priv->last_error = g_error_new (FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
+						_("An internal error occurred in libfprint"));
 		return;
 	}
 

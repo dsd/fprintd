@@ -31,6 +31,7 @@ GQuark fprint_error_quark(void);
 /* Errors */
 #define FPRINT_ERROR fprint_error_quark()
 typedef enum {
+	FPRINT_ERROR_INTERNAL,
 	FPRINT_ERROR_DISCOVER_PRINTS,
 	FPRINT_ERROR_PRINT_NOT_FOUND,
 	FPRINT_ERROR_PRINT_LOAD,
