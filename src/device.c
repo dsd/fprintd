@@ -101,12 +101,12 @@ static GObjectClass *parent_class = NULL;
 static guint32 last_id = ~0;
 static guint signals[NUM_SIGNALS] = { 0, };
 
-static void device_finalize(GObject *object)
+static void fprint_device_finalize(GObject *object)
 {
 	/* FIXME close and stuff */
 }
 
-static void device_set_property(GObject *object, guint property_id,
+static void fprint_device_set_property(GObject *object, guint property_id,
 	const GValue *value, GParamSpec *pspec)
 {
 	FprintDevice *self = (FprintDevice *) object;
@@ -122,7 +122,7 @@ static void device_set_property(GObject *object, guint property_id,
 	}
 }
 
-static void device_class_init(FprintDeviceClass *klass)
+static void fprint_device_class_init(FprintDeviceClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GParamSpec *pspec;
@@ -131,8 +131,8 @@ static void device_class_init(FprintDeviceClass *klass)
 		&dbus_glib_fprint_device_object_info);
 	parent_class = g_type_class_peek_parent(klass);
 
-	gobject_class->finalize = device_finalize;
-	gobject_class->set_property = device_set_property;
+	gobject_class->finalize = fprint_device_finalize;
+	gobject_class->set_property = fprint_device_set_property;
 	g_type_class_add_private(klass, sizeof(FprintDevicePrivate));
 
 	pspec = g_param_spec_pointer("discovered-dev", "Discovered device",
@@ -149,35 +149,15 @@ static void device_class_init(FprintDeviceClass *klass)
 		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 }
 
-static void device_init(GTypeInstance *instance, gpointer g_class)
+static void fprint_device_init(FprintDevice *device)
 {
-	FprintDevice *self = (FprintDevice *) instance;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(device);
 	priv->id = ++last_id;
 	priv->storage_type = FP_FILE_STORAGE;
 	storages[priv->storage_type].init();
 }
 
-GType fprint_device_get_type(void)
-{
-	static GType type = 0;
-	if (type == 0) {
-		static const GTypeInfo info = {
-			sizeof(FprintDeviceClass),
-			NULL,   /* base_init */
-			NULL,   /* base_finalize */
-			(GClassInitFunc) device_class_init,
-			NULL,   /* class_finalize */
-			NULL,   /* class_data */
-			sizeof(FprintDevice),
-			0,      /* n_preallocs */
-			device_init,
-		};
-		type = g_type_register_static(G_TYPE_OBJECT, "FprintDeviceType",
-			&info, 0);
-	}
-	return type;
-}
+G_DEFINE_TYPE(FprintDevice, fprint_device, G_TYPE_OBJECT);
 
 FprintDevice *fprint_device_new(struct fp_dscv_dev *ddev)
 {
