@@ -17,11 +17,14 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include "config.h"
+
 #include <poll.h>
 #include <stdlib.h>
 
 #include <dbus/dbus-glib-bindings.h>
 #include <glib.h>
+#include <glib/gi18n.h>
 #include <libfprint/fprint.h>
 #include <glib-object.h>
 
@@ -204,6 +207,10 @@ int main(int argc, char **argv)
 	DBusGProxy *driver_proxy;
 	guint32 request_name_ret;
 	int r = 0;
+
+	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
+	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+	textdomain (GETTEXT_PACKAGE);
 
 	r = fp_init();
 	if (r < 0) {
