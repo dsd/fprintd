@@ -45,15 +45,14 @@ typedef enum {
 
 /* Manager */
 #define FPRINT_TYPE_MANAGER            (fprint_manager_get_type())
-#define FPRINT_MANAGER(object)         (G_TYPE_CHECK_INSTANCE_CAST((object), FPRINT_MANAGER_TYPE, FprintManager))
-#define FPRINT_MANAGER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass), FPRINT_MANAGER_TYPE, FprintManagerClass))
-#define FPRINT_IS_MANAGER(object)      (G_TYPE_CHECK_INSTANCE_TYPE((object), FPRINT_MANAGER_TYPE))
+#define FPRINT_MANAGER(object)         (G_TYPE_CHECK_INSTANCE_CAST((object), FPRINT_TYPE_MANAGER, FprintManager))
+#define FPRINT_MANAGER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass), FPRINT_TYPE_MANAGER, FprintManagerClass))
+#define FPRINT_IS_MANAGER(object)      (G_TYPE_CHECK_INSTANCE_TYPE((object), FPRINT_TYPE_MANAGER))
 #define FPRINT_IS_MANAGER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), FPRINT_TYPE_MANAGER))
 #define FPRINT_MANAGER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj), FPRINT_TYPE_MANAGER, FprintManagerClass))
 
 struct FprintManager {
 	GObject parent;
-	GSList *dev_registry;
 };
 
 struct FprintManagerClass {
@@ -64,6 +63,7 @@ typedef struct FprintManager FprintManager;
 typedef struct FprintManagerClass FprintManagerClass;
 
 FprintManager *fprint_manager_new(void);
+GError *fprint_manager_get_error(FprintManager *manager);
 GType fprint_manager_get_type(void);
 
 /* Device */
