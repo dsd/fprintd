@@ -31,6 +31,7 @@
 #include "fprintd.h"
 
 DBusGConnection *fprintd_dbus_conn = NULL;
+static gboolean g_fatal_warnings = FALSE;
 
 GQuark fprint_error_quark(void)
 {
@@ -199,8 +200,14 @@ static int setup_pollfds(void)
 	return 0;
 }
 
+static const GOptionEntry entries[] = {
+	{"g-fatal-warnings", 0, 0, G_OPTION_ARG_NONE, &g_fatal_warnings, "Make all warnings fatal", NULL},
+	{ NULL }
+};
+
 int main(int argc, char **argv)
 {
+	GOptionContext *context;
 	GMainLoop *loop;
 	GError *error = NULL;
 	FprintManager *manager;
@@ -212,13 +219,30 @@ int main(int argc, char **argv)
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 	textdomain (GETTEXT_PACKAGE);
 
+	context = g_option_context_new ("Fingerprint handler daemon");
+	g_option_context_add_main_entries (context, entries, GETTEXT_PACKAGE);
+	g_type_init();
+
+	if (g_option_context_parse (context, &argc, &argv, &error) == FALSE) {
+		g_print ("couldn't parse command-line options: %s\n", error->message);
+		g_error_free (error);
+		return 1;
+	}
+
+	if (g_fatal_warnings) {
+		GLogLevelFlags fatal_mask;
+
+		fatal_mask = g_log_set_always_fatal (G_LOG_FATAL_MASK);
+		fatal_mask |= G_LOG_LEVEL_WARNING | G_LOG_LEVEL_CRITICAL;
+		g_log_set_always_fatal (fatal_mask);
+	}
+
 	r = fp_init();
 	if (r < 0) {
 		g_error("fprint init failed with error %d\n", r);
 		return r;
 	}
 
-	g_type_init();
 	loop = g_main_loop_new(NULL, FALSE);
 
 	r = setup_pollfds();
