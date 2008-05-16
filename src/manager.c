@@ -109,6 +109,9 @@ GError *fprint_manager_get_error(FprintManager *manager)
 {
 	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
 
+	if (priv->last_error == NULL)
+		return NULL;
+
 	return g_error_copy (priv->last_error);
 }
 
