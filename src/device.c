@@ -31,29 +31,29 @@
 
 extern DBusGConnection *fprintd_dbus_conn;
 
-static gboolean fprint_device_claim(FprintDevice *rdev,
+static void fprint_device_claim(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
-static gboolean fprint_device_release(FprintDevice *rdev,
+static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
-static gboolean fprint_device_list_enrolled_fingers(FprintDevice *rdev,
+static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	GArray **fingers, DBusGMethodInvocation *context);
-static gboolean fprint_device_load_print_data(FprintDevice *rdev,
+static void fprint_device_load_print_data(FprintDevice *rdev,
 	guint32 finger_num, guint32 *print_id, DBusGMethodInvocation *context);
-static gboolean fprint_device_unload_print_data(FprintDevice *rdev,
+static void fprint_device_unload_print_data(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context);
-static gboolean fprint_device_verify_start(FprintDevice *rdev,
+static void fprint_device_verify_start(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context);
-static gboolean fprint_device_verify_stop(FprintDevice *rdev,
+static void fprint_device_verify_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
-static gboolean fprint_device_enroll_start(FprintDevice *rdev,
+static void fprint_device_enroll_start(FprintDevice *rdev,
 	guint32 finger_num, DBusGMethodInvocation *context);
-static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
+static void fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 	gint type);
-static gboolean fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev, 
+static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev, 
 	gchar *username, GArray **fingers, DBusGMethodInvocation *context);
-static gboolean fprint_device_load_print_data_from_storage(FprintDevice *rdev,
+static void fprint_device_load_print_data_from_storage(FprintDevice *rdev,
 	guint32 finger_num, gchar *username, guint32 *print_id, DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
@@ -231,7 +231,7 @@ static void dev_open_cb(struct fp_dev *dev, int status, void *user_data)
 	dbus_g_method_return(session->context_claim_device);
 }
 
-static gboolean fprint_device_claim(FprintDevice *rdev,
+static void fprint_device_claim(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -246,7 +246,7 @@ static gboolean fprint_device_claim(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
 			    "Device was already claimed");
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	conn = dbus_g_connection_get_connection (fprintd_dbus_conn);
@@ -259,7 +259,7 @@ static gboolean fprint_device_claim(FprintDevice *rdev,
 		dbus_set_g_error (&error, &dbus_error);
 		dbus_g_method_return_error(context, error);
 		g_error_free (error);
-		return FALSE;
+		return;
 	}
 
 	priv->sender = sender;
@@ -278,10 +278,7 @@ static gboolean fprint_device_claim(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
 			"Could not attempt device open, error %d", r);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
 	}
-
-	return TRUE;
 }
 
 static void dev_close_cb(struct fp_dev *dev, void *user_data)
@@ -302,7 +299,7 @@ static void dev_close_cb(struct fp_dev *dev, void *user_data)
 	dbus_g_method_return(context);
 }
 
-static gboolean fprint_device_release(FprintDevice *rdev,
+static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -312,7 +309,7 @@ static gboolean fprint_device_release(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	/* Unload any loaded prints */
@@ -325,10 +322,9 @@ static gboolean fprint_device_release(FprintDevice *rdev,
 
 	session->context_release_device = context;
 	fp_async_dev_close(priv->dev, dev_close_cb, rdev);
-	return TRUE;
 }
 
-static gboolean fprint_device_list_enrolled_fingers(FprintDevice *rdev,
+static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	GArray **fingers, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -339,7 +335,7 @@ static gboolean fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	prints = fp_discover_prints();
@@ -347,7 +343,7 @@ static gboolean fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
 			"Failed to discover prints");
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	ret = g_array_new(FALSE, FALSE, sizeof(int));
@@ -361,10 +357,9 @@ static gboolean fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	*fingers = ret;
 
 	dbus_g_method_return(context);
-	return TRUE;
 }
 
-static gboolean fprint_device_load_print_data(FprintDevice *rdev,
+static void fprint_device_load_print_data(FprintDevice *rdev,
 	guint32 finger_num, guint32 *print_id, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -379,14 +374,14 @@ static gboolean fprint_device_load_print_data(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	if (!dprints) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
 			"Failed to discover prints");
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	for (dprint = dprints; *dprint; dprint++)
@@ -401,7 +396,7 @@ static gboolean fprint_device_load_print_data(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_PRINT_NOT_FOUND,
 			"Print not found");
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	r = fp_print_data_from_dscv_print(selected_print, &data);
@@ -410,7 +405,7 @@ static gboolean fprint_device_load_print_data(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_PRINT_LOAD,
 			"Print load failed with error %d", r);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	lprint = g_slice_new(struct loaded_print);
@@ -423,10 +418,9 @@ static gboolean fprint_device_load_print_data(FprintDevice *rdev,
 	*print_id = lprint->id;
 
 	dbus_g_method_return(context);
-	return TRUE;
 }
 
-static gboolean fprint_device_unload_print_data(FprintDevice *rdev,
+static void fprint_device_unload_print_data(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -436,7 +430,7 @@ static gboolean fprint_device_unload_print_data(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	g_message("unload print data %d for device %d", print_id, priv->id);
@@ -444,7 +438,7 @@ static gboolean fprint_device_unload_print_data(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
 			"No such loaded print %d", print_id);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	do {
@@ -456,13 +450,12 @@ static gboolean fprint_device_unload_print_data(FprintDevice *rdev,
 			elem);
 		g_slice_free(struct loaded_print, print);
 		dbus_g_method_return(context);
-		return TRUE;
+		return;
 	} while ((elem = g_slist_next(elem)) != NULL);
 
 	g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
 		"No such loaded print %d", print_id);
 	dbus_g_method_return_error(context, error);
-	return FALSE;
 }
 
 static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
@@ -475,7 +468,7 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 	fp_img_free(img);
 }
 
-static gboolean fprint_device_verify_start(FprintDevice *rdev,
+static void fprint_device_verify_start(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -487,7 +480,7 @@ static gboolean fprint_device_verify_start(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	g_message("start verification device %d print %d", priv->id, print_id);
@@ -495,7 +488,7 @@ static gboolean fprint_device_verify_start(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
 			"No such loaded print %d", print_id);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 	
 	do {
@@ -510,7 +503,7 @@ static gboolean fprint_device_verify_start(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
 			"No such loaded print %d", print_id);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	/* FIXME check freeing/copying of data */
@@ -519,11 +512,10 @@ static gboolean fprint_device_verify_start(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_START,
 			"Verify start failed with error %d", r);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	dbus_g_method_return(context);
-	return TRUE;
 }
 
 static void verify_stop_cb(struct fp_dev *dev, void *user_data)
@@ -531,7 +523,7 @@ static void verify_stop_cb(struct fp_dev *dev, void *user_data)
 	dbus_g_method_return((DBusGMethodInvocation *) user_data);
 }
 
-static gboolean fprint_device_verify_stop(FprintDevice *rdev,
+static void fprint_device_verify_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -540,7 +532,7 @@ static gboolean fprint_device_verify_stop(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
@@ -548,10 +540,7 @@ static gboolean fprint_device_verify_stop(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_STOP,
 			"Verify stop failed with error %d", r);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
 	}
-
-	return TRUE;
 }
 
 static void enroll_stage_cb(struct fp_dev *dev, int result,
@@ -570,7 +559,7 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 	fp_print_data_free(print);
 }
 
-static gboolean fprint_device_enroll_start(FprintDevice *rdev,
+static void fprint_device_enroll_start(FprintDevice *rdev,
 	guint32 finger_num, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -580,7 +569,7 @@ static gboolean fprint_device_enroll_start(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	g_message("start enrollment device %d finger %d", priv->id, finger_num);
@@ -591,11 +580,10 @@ static gboolean fprint_device_enroll_start(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ENROLL_START,
 			"Enroll start failed with error %d", r);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	dbus_g_method_return(context);
-	return TRUE;
 }
 
 static void enroll_stop_cb(struct fp_dev *dev, void *user_data)
@@ -603,7 +591,7 @@ static void enroll_stop_cb(struct fp_dev *dev, void *user_data)
 	dbus_g_method_return((DBusGMethodInvocation *) user_data);
 }
 
-static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
+static void fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -612,7 +600,7 @@ static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	r = fp_async_enroll_stop(priv->dev, enroll_stop_cb, context);
@@ -620,10 +608,8 @@ static gboolean fprint_device_enroll_stop(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ENROLL_STOP,
 			"Enroll stop failed with error %d", r);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
-
-	return TRUE;
 }
 
 static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
@@ -640,7 +626,7 @@ static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 	return TRUE;
 }
 
-static gboolean fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev,
+static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev,
 	gchar *username, GArray **fingers, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -651,7 +637,7 @@ static gboolean fprint_device_list_enrolled_fingers_from_storage(FprintDevice *r
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	prints = storages[priv->storage_type].discover_prints(priv->dev, username);
@@ -659,7 +645,7 @@ static gboolean fprint_device_list_enrolled_fingers_from_storage(FprintDevice *r
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
 			"Failed to discover prints");
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	ret = g_array_new(FALSE, FALSE, sizeof(int));
@@ -672,10 +658,9 @@ static gboolean fprint_device_list_enrolled_fingers_from_storage(FprintDevice *r
 	*fingers = ret;
 
 	dbus_g_method_return(context);
-	return TRUE;
 }
 
-static gboolean fprint_device_load_print_data_from_storage(FprintDevice *rdev,
+static void fprint_device_load_print_data_from_storage(FprintDevice *rdev,
 	guint32 finger_num, gchar *username, guint32 *print_id, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -687,7 +672,7 @@ static gboolean fprint_device_load_print_data_from_storage(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
-		return FALSE;
+		return;
 	}
 
 	r = storages[priv->storage_type].print_data_load(priv->dev, (enum fp_finger)finger_num, 
@@ -697,7 +682,7 @@ static gboolean fprint_device_load_print_data_from_storage(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_PRINT_LOAD,
 			"Print load failed with error %d", r);
 		dbus_g_method_return_error(context, error);
-		return FALSE;
+		return;
 	}
 
 	lprint = g_slice_new(struct loaded_print);
@@ -710,6 +695,5 @@ static gboolean fprint_device_load_print_data_from_storage(FprintDevice *rdev,
 	*print_id = lprint->id;
 
 	dbus_g_method_return(context);
-	return TRUE;
 }
 
