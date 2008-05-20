@@ -23,19 +23,19 @@
 #define FILE_STORAGE_H
 
 int file_storage_print_data_save(struct fp_print_data *data,
-	enum fp_finger finger, char *username);
+	enum fp_finger finger, const char *username);
 
 
 int file_storage_print_data_load(struct fp_dev *dev,
-	enum fp_finger finger, struct fp_print_data **data, char *username);
+	enum fp_finger finger, struct fp_print_data **data, const char *username);
 
 int file_storage_print_data_delete(struct fp_dev *dev,
-	enum fp_finger finger, char *username);
+	enum fp_finger finger, const char *username);
 
 int file_storage_init(void);
 
 int file_storage_deinit(void);
 
-GSList *file_storage_discover_prints(struct fp_dev *dev, char *username);
+GSList *file_storage_discover_prints(struct fp_dev *dev, const char *username);
 
 #endif

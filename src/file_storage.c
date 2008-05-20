@@ -78,7 +78,7 @@ static char *get_path_to_print(struct fp_dev *dev, enum fp_finger finger, char *
 		fp_dev_get_devtype(dev), finger, base_store);
 }
 
-static int file_storage_get_basestore_for_username(char *username, char **base_store)
+static int file_storage_get_basestore_for_username(const char *username, char **base_store)
 {
 	char *dirpath = FILE_STORAGE_PATH;
 
@@ -88,7 +88,7 @@ static int file_storage_get_basestore_for_username(char *username, char **base_s
 
 /* if username == NULL function will use current username */
 int file_storage_print_data_save(struct fp_print_data *data,
-	enum fp_finger finger, char *username)
+	enum fp_finger finger, const char *username)
 {
 	GError *err = NULL;
 	char *path;
@@ -164,7 +164,7 @@ static int load_from_file(char *path, struct fp_print_data **data)
 }
 
 int file_storage_print_data_load(struct fp_dev *dev,
-	enum fp_finger finger, struct fp_print_data **data, char *username)
+	enum fp_finger finger, struct fp_print_data **data, const char *username)
 {
 	gchar *path;
 	struct fp_print_data *fdata = NULL;
@@ -194,7 +194,7 @@ int file_storage_print_data_load(struct fp_dev *dev,
 }
 
 int file_storage_print_data_delete(struct fp_dev *dev,
-	enum fp_finger finger, char *username)
+	enum fp_finger finger, const char *username)
 {
 	int r;
 	char *base_store;
@@ -252,7 +252,7 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 	return list;
 }
 
-GSList *file_storage_discover_prints(struct fp_dev *dev, char *username)
+GSList *file_storage_discover_prints(struct fp_dev *dev, const char *username)
 {
 	//GDir *dir;
 	//const gchar *ent;

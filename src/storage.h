@@ -25,12 +25,12 @@
 #include "file_storage.h"
 
 typedef int (*storage_print_data_save)(struct fp_print_data *data,
-	enum fp_finger finger, char *username);
+	enum fp_finger finger, const char *username);
 typedef int (*storage_print_data_load)(struct fp_dev *dev,
-	enum fp_finger finger, struct fp_print_data **data, char *username);
+	enum fp_finger finger, struct fp_print_data **data, const char *username);
 typedef int (*storage_print_data_delete)(struct fp_dev *dev,
-	enum fp_finger finger, char *username);
-typedef GSList *(*storage_discover_prints)(struct fp_dev *dev, char *username);
+	enum fp_finger finger, const char *username);
+typedef GSList *(*storage_discover_prints)(struct fp_dev *dev, const char *username);
 typedef int (*storage_init)(void);
 typedef int (*storage_deinit)(void);
 
