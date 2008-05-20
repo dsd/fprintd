@@ -449,10 +449,15 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
+	const char *username = "hadess"; // FIXME
+	int r;
 
 	g_message("enroll_stage_cb: result %d", result);
-	if (result == FP_ENROLL_COMPLETE)
-		fp_print_data_save(print, session->enroll_finger);
+	if (result == FP_ENROLL_COMPLETE) {
+		r = storages[priv->storage_type].print_data_save(print, session->enroll_finger, username);
+		if (r < 0)
+			result = FP_ENROLL_FAIL;
+	}
 
 	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, result);
 	fp_img_free(img);
