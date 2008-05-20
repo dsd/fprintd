@@ -21,10 +21,10 @@
 
 #include <dbus/dbus-glib-bindings.h>
 #include <dbus/dbus-glib-lowlevel.h>
-#include <glib.h>
 #include <glib/gi18n.h>
+#include <polkit/polkit.h>
+#include <polkit-dbus/polkit-dbus.h>
 #include <libfprint/fprint.h>
-#include <glib-object.h>
 
 #include <sys/types.h>
 #include <pwd.h>
@@ -82,6 +82,8 @@ struct FprintDevicePrivate {
 	struct fp_dscv_dev *ddev;
 	struct fp_dev *dev;
 	struct session_data *session;
+
+	PolKitContext *pol_ctx;
 
 	/* The current user of the device, if claimed */
 	char *sender;
@@ -161,12 +163,55 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 }
 
+static gboolean
+pk_io_watch_have_data (GIOChannel *channel, GIOCondition condition, gpointer user_data)
+{
+	int fd;
+	PolKitContext *pk_context = user_data;
+	fd = g_io_channel_unix_get_fd (channel);
+	polkit_context_io_func (pk_context, fd);
+	return TRUE;
+}
+
+static int 
+pk_io_add_watch (PolKitContext *pk_context, int fd)
+{
+	guint id = 0;
+	GIOChannel *channel;
+	channel = g_io_channel_unix_new (fd);
+	if (channel == NULL)
+		goto out;
+	id = g_io_add_watch (channel, G_IO_IN, pk_io_watch_have_data, pk_context);
+	if (id == 0) {
+		g_io_channel_unref (channel);
+		goto out;
+	}
+	g_io_channel_unref (channel);
+out:
+	return id;
+}
+
+static void 
+pk_io_remove_watch (PolKitContext *pk_context, int watch_id)
+{
+	g_source_remove (watch_id);
+}
+
 static void fprint_device_init(FprintDevice *device)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(device);
 	priv->id = ++last_id;
 	priv->storage_type = FP_FILE_STORAGE;
 	storages[priv->storage_type].init();
+
+	/* Setup PolicyKit */
+	priv->pol_ctx = polkit_context_new ();
+	polkit_context_set_io_watch_functions (priv->pol_ctx, pk_io_add_watch, pk_io_remove_watch);
+	if (!polkit_context_init (priv->pol_ctx, NULL)) {
+		g_critical ("cannot initialize libpolkit");
+		polkit_context_unref (priv->pol_ctx);
+		priv->pol_ctx = NULL;
+	}
 }
 
 G_DEFINE_TYPE(FprintDevice, fprint_device, G_TYPE_OBJECT);
@@ -209,6 +254,59 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 	}
 
 	return retval;
+}
+
+static gboolean
+_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocation *context, const char *action)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	const char *sender;
+	GError *error;
+	DBusError dbus_error;
+	PolKitCaller *pk_caller;
+	PolKitAction *pk_action;
+	PolKitResult pk_result;
+
+	error = NULL;
+
+	/* Check that caller is privileged */
+	sender = dbus_g_method_get_sender (context);
+	dbus_error_init (&dbus_error);
+	pk_caller = polkit_caller_new_from_dbus_name (
+	    dbus_g_connection_get_connection (fprintd_dbus_conn),
+	    sender, 
+	    &dbus_error);
+	if (pk_caller == NULL) {
+		error = g_error_new (FPRINT_ERROR,
+				     FPRINT_ERROR_INTERNAL,
+				     "Error getting information about caller: %s: %s",
+				     dbus_error.name, dbus_error.message);
+		dbus_error_free (&dbus_error);
+		dbus_g_method_return_error (context, error);
+		g_error_free (error);
+		return FALSE;
+	}
+
+	pk_action = polkit_action_new ();
+	polkit_action_set_action_id (pk_action, action);
+	pk_result = polkit_context_is_caller_authorized (priv->pol_ctx, pk_action, pk_caller,
+							 FALSE, NULL);
+	polkit_caller_unref (pk_caller);
+	polkit_action_unref (pk_action);
+
+	if (pk_result != POLKIT_RESULT_YES) {
+		error = g_error_new (FPRINT_ERROR,
+				     FPRINT_ERROR_INTERNAL,
+				     "%s %s <-- (action, result)",
+				     action,
+				     polkit_result_to_string_representation (pk_result));
+		dbus_error_free (&dbus_error);
+		dbus_g_method_return_error (context, error);
+		g_error_free (error);
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static void dev_open_cb(struct fp_dev *dev, int status, void *user_data)
