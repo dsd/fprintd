@@ -26,6 +26,9 @@
 #include <libfprint/fprint.h>
 #include <glib-object.h>
 
+#include <sys/types.h>
+#include <pwd.h>
+
 #include "fprintd.h"
 #include "storage.h"
 
@@ -82,6 +85,11 @@ struct FprintDevicePrivate {
 
 	/* The current user of the device, if claimed */
 	char *sender;
+
+	/* Either the current user of the device, or if allowed,
+	 * what was set using SetCurrentUid */
+	char *username;
+	uid_t uid;
 
 	/* type of storage */
 	int storage_type;
@@ -236,8 +244,10 @@ static void fprint_device_claim(FprintDevice *rdev,
 	DBusError dbus_error;
 	char *sender;
 	unsigned long uid;
+	struct passwd *user;
 	int r;
 
+	/* Is it already claimed? */
 	if (priv->sender != NULL) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
 			    "Device was already claimed");
@@ -245,6 +255,7 @@ static void fprint_device_claim(FprintDevice *rdev,
 		return;
 	}
 
+	/* Get details about the current sender, and username/uid */
 	conn = dbus_g_connection_get_connection (fprintd_dbus_conn);
 	sender = dbus_g_method_get_sender (context);
 	dbus_error_init (&dbus_error);
@@ -258,9 +269,19 @@ static void fprint_device_claim(FprintDevice *rdev,
 		return;
 	}
 
+	user = getpwuid (uid);
+	if (user == NULL) {
+		g_free (sender);
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
+			"Failed to get information about user UID %lu", uid);
+		dbus_g_method_return_error(context, error);
+		return;
+	}
+
+	priv->username = g_strdup (user->pw_name);
 	priv->sender = sender;
 
-	g_message ("user claiming the device: %ld", uid);
+	g_message ("user claiming the device: %s (%ld)", priv->username, uid);
 	/* FIXME call polkit to check whether allowed */
 
 	g_message("claiming device %d", priv->id);
@@ -290,6 +311,9 @@ static void dev_close_cb(struct fp_dev *dev, void *user_data)
 
 	g_free (priv->sender);
 	priv->sender = NULL;
+
+	g_free (priv->username);
+	priv->username = NULL;
 
 	g_message("released device %d", priv->id);
 	dbus_g_method_return(context);
@@ -449,12 +473,11 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
-	const char *username = "hadess"; // FIXME
 	int r;
 
 	g_message("enroll_stage_cb: result %d", result);
 	if (result == FP_ENROLL_COMPLETE) {
-		r = storages[priv->storage_type].print_data_save(print, session->enroll_finger, username);
+		r = storages[priv->storage_type].print_data_save(print, session->enroll_finger, priv->username);
 		if (r < 0)
 			result = FP_ENROLL_FAIL;
 	}
@@ -536,7 +559,6 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
-	const char *username = "hadess"; //FIXME
 	GSList *prints;
 	GSList *item;
 	GArray *ret;
@@ -546,7 +568,7 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 		return;
 	}
 
-	prints = storages[priv->storage_type].discover_prints(priv->dev, username);
+	prints = storages[priv->storage_type].discover_prints(priv->dev, priv->username);
 	if (!prints) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
 			"Failed to discover prints");
@@ -572,7 +594,6 @@ static void fprint_device_load_print_data(FprintDevice *rdev,
 	struct session_data *session = priv->session;
 	struct loaded_print *lprint;
 	struct fp_print_data *data;
-	const char *username = "hadess"; //FIXME
 	GError *error = NULL;
 	int r;
 
@@ -582,7 +603,7 @@ static void fprint_device_load_print_data(FprintDevice *rdev,
 	}
 
 	r = storages[priv->storage_type].print_data_load(priv->dev, (enum fp_finger)finger_num, 
-		&data, (char *)username);
+		&data, priv->username);
 
 	if (r < 0) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_PRINT_LOAD,
