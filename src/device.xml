@@ -59,7 +59,7 @@
 			<arg type="u" name="storage_id" direction="in" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
-		
+
 		<method name="ListEnrolledFingersFromStorage">
 			<arg type="s" name="username" direction="in" />
 			<arg type="au" name="enrolled_fingers" direction="out" />

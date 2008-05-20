@@ -36,9 +36,9 @@ static void fprint_device_claim(FprintDevice *rdev,
 static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
-	GArray **fingers, DBusGMethodInvocation *context);
+	DBusGMethodInvocation *context);
 static void fprint_device_load_print_data(FprintDevice *rdev,
-	guint32 finger_num, guint32 *print_id, DBusGMethodInvocation *context);
+	guint32 finger_num, DBusGMethodInvocation *context);
 static void fprint_device_unload_print_data(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context);
 static void fprint_device_verify_start(FprintDevice *rdev,
@@ -52,9 +52,9 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 	gint type);
 static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev, 
-	gchar *username, GArray **fingers, DBusGMethodInvocation *context);
+	gchar *username, DBusGMethodInvocation *context);
 static void fprint_device_load_print_data_from_storage(FprintDevice *rdev,
-	guint32 finger_num, gchar *username, guint32 *print_id, DBusGMethodInvocation *context);
+	guint32 finger_num, gchar *username, DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
@@ -325,7 +325,7 @@ static void fprint_device_release(FprintDevice *rdev,
 }
 
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
-	GArray **fingers, DBusGMethodInvocation *context)
+	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct fp_dscv_print **prints;
@@ -354,13 +354,12 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 		}
 
 	fp_dscv_prints_free(prints);
-	*fingers = ret;
 
-	dbus_g_method_return(context);
+	dbus_g_method_return(context, ret);
 }
 
 static void fprint_device_load_print_data(FprintDevice *rdev,
-	guint32 finger_num, guint32 *print_id, DBusGMethodInvocation *context)
+	guint32 finger_num, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
@@ -415,9 +414,8 @@ static void fprint_device_load_print_data(FprintDevice *rdev,
 
 	g_message("load print data finger %d for device %d = %d",
 		finger_num, priv->id, lprint->id);
-	*print_id = lprint->id;
 
-	dbus_g_method_return(context);
+	dbus_g_method_return(context, lprint->id);
 }
 
 static void fprint_device_unload_print_data(FprintDevice *rdev,
@@ -627,7 +625,7 @@ static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 }
 
 static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev,
-	gchar *username, GArray **fingers, DBusGMethodInvocation *context)
+	gchar *username, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
@@ -655,13 +653,12 @@ static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev,
 	}
 
 	g_slist_free(prints);
-	*fingers = ret;
 
-	dbus_g_method_return(context);
+	dbus_g_method_return(context, ret);
 }
 
 static void fprint_device_load_print_data_from_storage(FprintDevice *rdev,
-	guint32 finger_num, gchar *username, guint32 *print_id, DBusGMethodInvocation *context)
+	guint32 finger_num, gchar *username, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
@@ -692,8 +689,7 @@ static void fprint_device_load_print_data_from_storage(FprintDevice *rdev,
 
 	g_message("load print data finger %d for device %d = %d",
 		finger_num, priv->id, lprint->id);
-	*print_id = lprint->id;
 
-	dbus_g_method_return(context);
+	dbus_g_method_return(context, lprint->id);
 }
 
