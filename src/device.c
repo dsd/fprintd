@@ -35,8 +35,6 @@ static void fprint_device_claim(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
-static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
-	DBusGMethodInvocation *context);
 static void fprint_device_unload_print_data(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context);
 static void fprint_device_verify_start(FprintDevice *rdev,
@@ -49,8 +47,8 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 	gint type);
-static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev, 
-	gchar *username, DBusGMethodInvocation *context);
+static void fprint_device_list_enrolled_fingers(FprintDevice *rdev, 
+	DBusGMethodInvocation *context);
 static void fprint_device_load_print_data(FprintDevice *rdev,
 	guint32 finger_num, DBusGMethodInvocation *context);
 
@@ -322,40 +320,6 @@ static void fprint_device_release(FprintDevice *rdev,
 	fp_async_dev_close(priv->dev, dev_close_cb, rdev);
 }
 
-static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
-	DBusGMethodInvocation *context)
-{
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-	struct fp_dscv_print **prints;
-	struct fp_dscv_print **print;
-	GArray *ret;
-	GError *error = NULL;
-
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
-	}
-
-	prints = fp_discover_prints();
-	if (!prints) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
-			"Failed to discover prints");
-		dbus_g_method_return_error(context, error);
-		return;
-	}
-
-	ret = g_array_new(FALSE, FALSE, sizeof(int));
-	for (print = prints; *print; print++)
-		if (fp_dev_supports_dscv_print(priv->dev, *print)) {
-			int finger = fp_dscv_print_get_finger(*print);
-			ret = g_array_append_val(ret, finger);
-		}
-
-	fp_dscv_prints_free(prints);
-
-	dbus_g_method_return(context, ret);
-}
-
 static void fprint_device_unload_print_data(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context)
 {
@@ -562,11 +526,12 @@ static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 	return TRUE;
 }
 
-static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev,
-	gchar *username, DBusGMethodInvocation *context)
+static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
+	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
+	const char *username = "hadess"; //FIXME
 	GSList *prints;
 	GSList *item;
 	GArray *ret;

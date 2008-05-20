@@ -146,7 +146,7 @@ static DBusGProxy *open_device(void)
 	return dev;
 }
 
-static guint32 find_finger(DBusGProxy *dev, const char *username)
+static guint32 find_finger(DBusGProxy *dev)
 {
 	GError *error = NULL;
 	GArray *fingers;
@@ -154,7 +154,7 @@ static guint32 find_finger(DBusGProxy *dev, const char *username)
 	int fingernum;
 	guint32 print_id;
 
-	if (!net_reactivated_Fprint_Device_list_enrolled_fingers_from_storage(dev, username, &fingers, &error))
+	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, &fingers, &error))
 		g_error("ListEnrolledFingers failed: %s", error->message);
 
 	if (fingers->len == 0) {
@@ -226,16 +226,13 @@ int main(int argc, char **argv)
 	GMainLoop *loop;
 	DBusGProxy *dev;
 	guint32 print_id;
-	const char *username;
 
 	g_type_init();
 	loop = g_main_loop_new(NULL, FALSE);
 	create_manager();
 
-	username = g_get_user_name ();
-
 	dev = open_device();
-	print_id = find_finger(dev, username);
+	print_id = find_finger(dev);
 	do_verify(dev, print_id);
 	unload_print(dev, print_id);
 	release_device(dev);
