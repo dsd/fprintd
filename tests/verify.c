@@ -172,7 +172,7 @@ static guint32 find_finger(DBusGProxy *dev, const char *username)
 	g_array_free(fingers, TRUE);
 
 	g_print("Verifying: %s\n", fingerstr(fingernum));
-	if (!net_reactivated_Fprint_Device_load_print_data_from_storage(dev, fingernum, "anarsoul", &print_id, &error))
+	if (!net_reactivated_Fprint_Device_load_print_data(dev, fingernum, &print_id, &error))
 		g_error("LoadPrintData failed: %s", error->message);
 
 	return print_id;

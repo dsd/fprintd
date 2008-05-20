@@ -37,8 +37,6 @@ static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
-static void fprint_device_load_print_data(FprintDevice *rdev,
-	guint32 finger_num, DBusGMethodInvocation *context);
 static void fprint_device_unload_print_data(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context);
 static void fprint_device_verify_start(FprintDevice *rdev,
@@ -53,8 +51,8 @@ static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 	gint type);
 static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev, 
 	gchar *username, DBusGMethodInvocation *context);
-static void fprint_device_load_print_data_from_storage(FprintDevice *rdev,
-	guint32 finger_num, gchar *username, DBusGMethodInvocation *context);
+static void fprint_device_load_print_data(FprintDevice *rdev,
+	guint32 finger_num, DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
@@ -358,66 +356,6 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	dbus_g_method_return(context, ret);
 }
 
-static void fprint_device_load_print_data(FprintDevice *rdev,
-	guint32 finger_num, DBusGMethodInvocation *context)
-{
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-	struct session_data *session = priv->session;
-	struct loaded_print *lprint;
-	struct fp_dscv_print **dprints = fp_discover_prints();
-	struct fp_dscv_print **dprint;
-	struct fp_dscv_print *selected_print = NULL;
-	struct fp_print_data *data;
-	GError *error = NULL;
-	int r;
-
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
-	}
-
-	if (!dprints) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
-			"Failed to discover prints");
-		dbus_g_method_return_error(context, error);
-		return;
-	}
-
-	for (dprint = dprints; *dprint; dprint++)
-		if (fp_dev_supports_dscv_print(priv->dev, *dprint)
-				&& fp_dscv_print_get_finger(*dprint) == finger_num) {
-			selected_print = *dprint;
-			break;
-		}
-	
-	if (!selected_print) {
-		fp_dscv_prints_free(dprints);
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_PRINT_NOT_FOUND,
-			"Print not found");
-		dbus_g_method_return_error(context, error);
-		return;
-	}
-
-	r = fp_print_data_from_dscv_print(selected_print, &data);
-	fp_dscv_prints_free(dprints);
-	if (r < 0) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_PRINT_LOAD,
-			"Print load failed with error %d", r);
-		dbus_g_method_return_error(context, error);
-		return;
-	}
-
-	lprint = g_slice_new(struct loaded_print);
-	lprint->data = data;
-	lprint->id = ++last_id;
-	session->loaded_prints = g_slist_prepend(session->loaded_prints, lprint);
-
-	g_message("load print data finger %d for device %d = %d",
-		finger_num, priv->id, lprint->id);
-
-	dbus_g_method_return(context, lprint->id);
-}
-
 static void fprint_device_unload_print_data(FprintDevice *rdev,
 	guint32 print_id, DBusGMethodInvocation *context)
 {
@@ -657,13 +595,14 @@ static void fprint_device_list_enrolled_fingers_from_storage(FprintDevice *rdev,
 	dbus_g_method_return(context, ret);
 }
 
-static void fprint_device_load_print_data_from_storage(FprintDevice *rdev,
-	guint32 finger_num, gchar *username, DBusGMethodInvocation *context)
+static void fprint_device_load_print_data(FprintDevice *rdev,
+	guint32 finger_num, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
 	struct loaded_print *lprint;
 	struct fp_print_data *data;
+	const char *username = "hadess"; //FIXME
 	GError *error = NULL;
 	int r;
 
