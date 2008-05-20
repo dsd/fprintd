@@ -10,3 +10,9 @@ Enforce command sequences:
  only allow VerifyStop during a verification
  etc
 
+
+- Make storage handling a GObject interface, would make plugging in new
+  backends easier, even handling plugins?
+- Make storage per-manager
+- Move storage setting to a configuration file
+- Kill FromStorage variants, we should always load/read from our custom storage
