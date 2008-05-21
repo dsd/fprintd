@@ -60,6 +60,11 @@
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
+		<method name="SetUsername">
+			<arg type="s" name="username" direction="in" />
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
 	</interface>
 </node>
 

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+
+<policyconfig>
+
+  <vendor>The FPrint Project</vendor>
+  <vendor_url>http://reactivated.net/fprint/</vendor_url>
+  <icon_name>fprint</icon_name>
+
+  <action id="net.reactivated.fprint.device.verify">
+    <_description>Verify a fingerprint</_description>
+    <_message>Privileges are required to verify fingerprints.</_message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="net.reactivated.fprint.device.enroll">
+    <_description>Enroll new fingerprints</_description>
+    <_message>Privileges are required to enroll new fingerprints.</_message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="net.reactivated.fprint.device.setusername">
+    <_description>Select a user to enroll</_description>
+    <_message>Privileges are required to enroll new fingerprints for other users.</_message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep_always</allow_active>
+    </defaults>
+  </action>
+
+</policyconfig>

@@ -34,6 +34,9 @@
 
 extern DBusGConnection *fprintd_dbus_conn;
 
+static void fprint_device_set_username(FprintDevice *rdev,
+	const char *username,
+	DBusGMethodInvocation *context);
 static void fprint_device_claim(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_release(FprintDevice *rdev,
@@ -89,9 +92,8 @@ struct FprintDevicePrivate {
 	char *sender;
 
 	/* Either the current user of the device, or if allowed,
-	 * what was set using SetCurrentUid */
+	 * what was set using SetUsername */
 	char *username;
-	uid_t uid;
 
 	/* type of storage */
 	int storage_type;
@@ -257,17 +259,14 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 }
 
 static gboolean
-_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocation *context, const char *action)
+_fprint_device_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocation *context, const char *action, GError **error)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	const char *sender;
-	GError *error;
 	DBusError dbus_error;
 	PolKitCaller *pk_caller;
 	PolKitAction *pk_action;
 	PolKitResult pk_result;
-
-	error = NULL;
 
 	/* Check that caller is privileged */
 	sender = dbus_g_method_get_sender (context);
@@ -277,36 +276,101 @@ _check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocation *context, co
 	    sender, 
 	    &dbus_error);
 	if (pk_caller == NULL) {
-		error = g_error_new (FPRINT_ERROR,
-				     FPRINT_ERROR_INTERNAL,
-				     "Error getting information about caller: %s: %s",
-				     dbus_error.name, dbus_error.message);
+		g_set_error (error, FPRINT_ERROR,
+			     FPRINT_ERROR_INTERNAL,
+			     "Error getting information about caller: %s: %s",
+			     dbus_error.name, dbus_error.message);
 		dbus_error_free (&dbus_error);
-		dbus_g_method_return_error (context, error);
-		g_error_free (error);
 		return FALSE;
 	}
 
 	pk_action = polkit_action_new ();
 	polkit_action_set_action_id (pk_action, action);
 	pk_result = polkit_context_is_caller_authorized (priv->pol_ctx, pk_action, pk_caller,
-							 FALSE, NULL);
+							 TRUE, NULL);
 	polkit_caller_unref (pk_caller);
 	polkit_action_unref (pk_action);
 
 	if (pk_result != POLKIT_RESULT_YES) {
-		error = g_error_new (FPRINT_ERROR,
-				     FPRINT_ERROR_INTERNAL,
-				     "%s %s <-- (action, result)",
-				     action,
-				     polkit_result_to_string_representation (pk_result));
+		g_set_error (error, FPRINT_ERROR,
+			     FPRINT_ERROR_INTERNAL,
+			     "%s %s <-- (action, result)",
+			     action,
+			     polkit_result_to_string_representation (pk_result));
 		dbus_error_free (&dbus_error);
-		dbus_g_method_return_error (context, error);
-		g_error_free (error);
 		return FALSE;
 	}
 
 	return TRUE;
+}
+
+static gboolean
+_fprint_device_check_polkit_for_actions (FprintDevice *rdev,
+					 DBusGMethodInvocation *context,
+					 const char *action1,
+					 const char *action2,
+					 GError **error)
+{
+	if (_fprint_device_check_polkit_for_action (rdev, context, action1, error) != FALSE)
+		return TRUE;
+
+	g_error_free (*error);
+	*error = NULL;
+
+	return _fprint_device_check_polkit_for_action (rdev, context, action2, error);
+}
+
+static void
+fprint_device_set_username (FprintDevice *rdev,
+			    const char *username,
+			    DBusGMethodInvocation *context)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	GError *error = NULL;
+	struct session_data *session = priv->session;
+	GSList *elem = session->loaded_prints;
+
+	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.setusername", &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (username == NULL) {
+		dbus_g_method_return (context);
+		return;
+	}
+
+	/* We already have a username, check if the one we're
+	 * setting is the same */
+	if (g_str_equal (username, priv->username) != FALSE) {
+		dbus_g_method_return (context);
+		return;
+	}
+
+	g_free (priv->username);
+	priv->username = g_strdup (username);
+
+	/* Any fingerprints to unload? */
+	if (!elem) {
+		dbus_g_method_return (context);
+		return;
+	}
+
+	/* Empty the fingerprints, as we have a different user */
+	do {
+		struct loaded_print *print = elem->data;
+
+		session->loaded_prints = g_slist_delete_link(session->loaded_prints,
+			elem);
+		g_slice_free(struct loaded_print, print);
+	} while ((elem = g_slist_next(elem)) != NULL);
+
+	dbus_g_method_return (context);
 }
 
 static void dev_open_cb(struct fp_dev *dev, int status, void *user_data)
@@ -350,6 +414,14 @@ static void fprint_device_claim(FprintDevice *rdev,
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
 			    "Device was already claimed");
 		dbus_g_method_return_error(context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_actions (rdev, context,
+						     "net.reactivated.fprint.device.verify",
+						     "net.reactivated.fprint.device.enroll",
+						     &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
 		return;
 	}
 
@@ -430,6 +502,15 @@ static void fprint_device_release(FprintDevice *rdev,
 		return;
 	}
 
+	/* People that can claim can also release */
+	if (_fprint_device_check_polkit_for_actions (rdev, context,
+						     "net.reactivated.fprint.device.verify",
+						     "net.reactivated.fprint.device.enroll",
+						     &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
 	/* Unload any loaded prints */
 	if (elem) {
 		do
@@ -451,6 +532,11 @@ static void fprint_device_unload_print_data(FprintDevice *rdev,
 	GError *error = NULL;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
 		return;
 	}
@@ -501,6 +587,11 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 	int r;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
 		return;
 	}
@@ -557,6 +648,11 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		return;
 	}
 
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
 	r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
 	if (r < 0) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_STOP,
@@ -598,6 +694,11 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 		return;
 	}
 
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
 	g_message("start enrollment device %d finger %d", priv->id, finger_num);
 	session->enroll_finger = finger_num;
 	
@@ -625,6 +726,11 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 	int r;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
 		return;
 	}
@@ -666,6 +772,11 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 		return;
 	}
 
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
 	prints = storages[priv->storage_type].discover_prints(priv->dev, priv->username);
 	if (!prints) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
@@ -696,6 +807,11 @@ static void fprint_device_load_print_data(FprintDevice *rdev,
 	int r;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
 		return;
 	}
