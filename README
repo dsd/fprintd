@@ -14,15 +14,20 @@ API use cases
 =============
 
 - User wants to use the fingerprint reader, and enroll
-  his fingerprints
+  his fingerprints, or remove some fingerprints from the database
 
-- Administrator wants to enroll fingerprints for a particular user
+- Administrator wants to enroll fingerprints for a particular user,
+  or remove fingerprints for a particular user
 
 - Laptop/desktop authentication:
-  * pam module wants to check whether a particular user
-    has any fingerprints enrolled
-  * pam module wants to ask a user to verify a fingerprint
+  * Check for fingerprint devices
+  * Check whether a particular user has any fingerprints enrolled
+  * Verify a fingerprint for a particular user, or, if the device
+  supports it, verify that the fingerprint matches against
+  any of the fingerprints enrolled
 
-- Point Of Sale authentication:
+- Point Of Sale authentication (in a bar, the fingerprint reader is
+  used to see who accesses a particular point of sale/till, in place
+  of PIN code authentication and/or tokens)
   * Given a list of users, verify which one has scanned their finger
 
