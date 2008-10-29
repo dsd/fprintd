@@ -10,3 +10,19 @@ Written in C. Requires bleeding edge libfprint (libusb-1.0 port).
 
 Licensed under the GPL version 2 (see COPYING).
 
+API use cases
+=============
+
+- User wants to use the fingerprint reader, and enroll
+  his fingerprints
+
+- Administrator wants to enroll fingerprints for a particular user
+
+- Laptop/desktop authentication:
+  * pam module wants to check whether a particular user
+    has any fingerprints enrolled
+  * pam module wants to ask a user to verify a fingerprint
+
+- Point Of Sale authentication:
+  * Given a list of users, verify which one has scanned their finger
+
