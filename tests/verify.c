@@ -152,7 +152,6 @@ static guint32 find_finger(DBusGProxy *dev)
 	GArray *fingers;
 	guint i;
 	int fingernum;
-	guint32 print_id;
 
 	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, &fingers, &error))
 		g_error("ListEnrolledFingers failed: %s", error->message);
@@ -172,10 +171,8 @@ static guint32 find_finger(DBusGProxy *dev)
 	g_array_free(fingers, TRUE);
 
 	g_print("Verifying: %s\n", fingerstr(fingernum));
-	if (!net_reactivated_Fprint_Device_load_print_data(dev, fingernum, &print_id, &error))
-		g_error("LoadPrintData failed: %s", error->message);
 
-	return print_id;
+	return fingernum;
 }
 
 static void verify_result(GObject *object, int result, void *user_data)
@@ -186,7 +183,7 @@ static void verify_result(GObject *object, int result, void *user_data)
 		*verify_completed = TRUE;
 }
 
-static void do_verify(DBusGProxy *dev, guint32 print_id)
+static void do_verify(DBusGProxy *dev, guint32 finger_num)
 {
 	GError *error;
 	gboolean verify_completed = FALSE;
@@ -195,7 +192,7 @@ static void do_verify(DBusGProxy *dev, guint32 print_id)
 	dbus_g_proxy_connect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result),
 		&verify_completed, NULL);
 
-	if (!net_reactivated_Fprint_Device_verify_start(dev, print_id, &error))
+	if (!net_reactivated_Fprint_Device_verify_start(dev, finger_num, &error))
 		g_error("VerifyStart failed: %s", error->message);
 
 	while (!verify_completed)
@@ -205,13 +202,6 @@ static void do_verify(DBusGProxy *dev, guint32 print_id)
 
 	if (!net_reactivated_Fprint_Device_verify_stop(dev, &error))
 		g_error("VerifyStop failed: %s", error->message);
-}
-
-static void unload_print(DBusGProxy *dev, guint32 print_id)
-{
-	GError *error = NULL;
-	if (!net_reactivated_Fprint_Device_unload_print_data(dev, print_id, &error))
-		g_error("UnloadPrint failed: %s", error->message);
 }
 
 static void release_device(DBusGProxy *dev)
@@ -225,16 +215,15 @@ int main(int argc, char **argv)
 {
 	GMainLoop *loop;
 	DBusGProxy *dev;
-	guint32 print_id;
+	guint32 finger_num;
 
 	g_type_init();
 	loop = g_main_loop_new(NULL, FALSE);
 	create_manager();
 
 	dev = open_device();
-	print_id = find_finger(dev);
-	do_verify(dev, print_id);
-	unload_print(dev, print_id);
+	finger_num = find_finger(dev);
+	do_verify(dev, finger_num);
 	release_device(dev);
 	return 0;
 }

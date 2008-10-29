@@ -17,18 +17,6 @@
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
-		<!-- FIXME make OO -->
-		<method name="LoadPrintData">
-			<arg type="u" name="finger_num" direction="in" />
-			<arg type="u" name="print_id" direction="out" />
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-		</method>
-
-		<method name="UnloadPrintData">
-			<arg type="u" name="print_id" direction="in" />
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-		</method>
-
 		<method name="VerifyStart">
 			<arg type="u" name="print_id" direction="in" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
