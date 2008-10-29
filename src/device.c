@@ -714,7 +714,7 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 		return;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
 		return;
 	}
