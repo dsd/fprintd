@@ -158,6 +158,16 @@ static void release_device(DBusGProxy *dev)
 		g_error("ReleaseDevice failed: %s", error->message);
 }
 
+static gboolean set_username(DBusGProxy *dev, const char *username)
+{
+	GError *error = NULL;
+	if (!net_reactivated_Fprint_Device_set_username(dev, username, &error)) {
+		g_error("SetUsename failed: %s", error->message);
+		return FALSE;
+	}
+	return TRUE;
+}
+
 int main(int argc, char **argv)
 {
 	GMainLoop *loop;
@@ -168,6 +178,10 @@ int main(int argc, char **argv)
 	create_manager();
 
 	dev = open_device();
+	if (argc == 2) {
+		if (set_username(dev, argv[1]) == FALSE)
+			return 1;
+	}
 	do_enroll(dev);
 	release_device(dev);
 	return 0;
