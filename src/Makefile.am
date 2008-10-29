@@ -7,8 +7,8 @@ EXTRA_DIST = fprintd.xml
 libexec_PROGRAMS = fprintd
 
 fprintd_SOURCES = main.c manager.c device.c file_storage.c
-fprintd_LDADD = $(DBUS_GLIB_LIBS) $(FPRINT_LIBS) $(POLKIT_LIBS)
-fprintd_CFLAGS = $(AM_CFLAGS) $(DBUS_GLIB_CFLAGS) $(FPRINT_CFLAGS) $(POLKIT_CFLAGS) -DLOCALEDIR=\""$(datadir)/locale"\"
+fprintd_LDADD = $(FPRINT_LIBS) $(DAEMON_LIBS)
+fprintd_CFLAGS = $(AM_CFLAGS) $(FPRINT_CFLAGS) $(DAEMON_CFLAGS) -DLOCALEDIR=\""$(datadir)/locale"\" -DPLUGINDIR=\""$(libdir)/fprintd/modules"\"
 
 manager-dbus-glue.h: manager.xml
 	dbus-binding-tool --prefix=fprint_manager --mode=glib-server $< --output=$@

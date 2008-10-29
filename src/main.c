@@ -27,8 +27,11 @@
 #include <glib/gi18n.h>
 #include <libfprint/fprint.h>
 #include <glib-object.h>
+#include <gmodule.h>
 
 #include "fprintd.h"
+#include "storage.h"
+#include "file_storage.h"
 
 DBusGConnection *fprintd_dbus_conn = NULL;
 static gboolean g_fatal_warnings = FALSE;
@@ -200,6 +203,88 @@ static int setup_pollfds(void)
 	return 0;
 }
 
+static void
+set_storage_file (void)
+{
+	store.init = &file_storage_init;
+	store.deinit = &file_storage_deinit;
+	store.print_data_save = &file_storage_print_data_save;
+	store.print_data_load = &file_storage_print_data_load;
+	store.print_data_delete = &file_storage_print_data_delete;
+	store.discover_prints = &file_storage_discover_prints;
+}
+
+static gboolean
+load_storage_module (const char *module_name)
+{
+	GModule *module;
+	char *filename;
+
+	filename = g_module_build_path (PLUGINDIR, module_name);
+	module = g_module_open (filename, 0);
+	g_free (filename);
+	if (module == NULL)
+		return FALSE;
+
+	if (!g_module_symbol (module, "init", (gpointer *) &store.init) ||
+	    !g_module_symbol (module, "deinit", (gpointer *) &store.deinit) ||
+	    !g_module_symbol (module, "print_data_save", (gpointer *) &store.print_data_save) ||
+	    !g_module_symbol (module, "print_data_load", (gpointer *) &store.print_data_load) ||
+	    !g_module_symbol (module, "print_data_delete", (gpointer *) &store.print_data_delete) ||
+	    !g_module_symbol (module, "discover_prints", (gpointer *) &store.discover_prints)) {
+	    	g_module_close (module);
+	    	return FALSE;
+	}
+
+	g_module_make_resident (module);
+
+	return TRUE;
+}
+
+static gboolean
+load_conf (void)
+{
+	GKeyFile *file;
+	char *filename;
+	char *module_name;
+	GError *error = NULL;
+	gboolean ret;
+
+	filename = g_build_filename (SYSCONFDIR, "fprintd.conf", NULL);
+	file = g_key_file_new ();
+	if (!g_key_file_load_from_file (file, filename, G_KEY_FILE_NONE, &error)) {
+		g_print ("Could not open fprintd.conf: %s\n", error->message);
+		goto bail;
+	}
+
+	g_free (filename);
+	filename = NULL;
+
+	module_name = g_key_file_get_string (file, "storage", "type", &error);
+	if (module_name == NULL)
+		goto bail;
+
+	g_key_file_free (file);
+
+	if (g_str_equal (module_name, "file")) {
+		g_free (module_name);
+		set_storage_file ();
+		return TRUE;
+	}
+
+	ret = load_storage_module (module_name);
+	g_free (module_name);
+
+	return ret;
+
+bail:
+	g_key_file_free (file);
+	g_free (filename);
+	g_error_free (error);
+
+	return FALSE;
+}
+
 static const GOptionEntry entries[] = {
 	{"g-fatal-warnings", 0, 0, G_OPTION_ARG_NONE, &g_fatal_warnings, "Make all warnings fatal", NULL},
 	{ NULL }
@@ -236,6 +321,12 @@ int main(int argc, char **argv)
 		fatal_mask |= G_LOG_LEVEL_WARNING | G_LOG_LEVEL_CRITICAL;
 		g_log_set_always_fatal (fatal_mask);
 	}
+
+	/* Load the configuration file,
+	 * and the default storage plugin */
+	if (!load_conf())
+		set_storage_file ();
+	store.init ();
 
 	r = fp_init();
 	if (r < 0) {

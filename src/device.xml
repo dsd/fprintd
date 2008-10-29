@@ -47,11 +47,6 @@
 			<arg type="i" name="result" />
 		</signal>
 
-		<method name="SetStorageType">
-			<arg type="u" name="storage_id" direction="in" />
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-		</method>
-
 		<method name="SetUsername">
 			<arg type="s" name="username" direction="in" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />

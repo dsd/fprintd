@@ -49,8 +49,6 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 	guint32 finger_num, DBusGMethodInvocation *context);
 static void fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
-static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
-	gint type);
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev, 
 	DBusGMethodInvocation *context);
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
@@ -197,8 +195,6 @@ static void fprint_device_init(FprintDevice *device)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(device);
 	priv->id = ++last_id;
-	priv->storage_type = FP_FILE_STORAGE;
-	storages[priv->storage_type].init();
 
 	/* Setup PolicyKit */
 	priv->pol_ctx = polkit_context_new ();
@@ -514,8 +510,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 
 	g_message("start verification device %d finger %d", priv->id, finger_num);
 
-	r = storages[priv->storage_type].print_data_load(priv->dev, (enum fp_finger)finger_num, 
-							 &data, priv->username);
+	r = store.print_data_load(priv->dev, (enum fp_finger)finger_num, 
+				  &data, priv->username);
 
 	if (r < 0 || !data) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
@@ -577,7 +573,7 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 
 	g_message("enroll_stage_cb: result %d", result);
 	if (result == FP_ENROLL_COMPLETE) {
-		r = storages[priv->storage_type].print_data_save(print, session->enroll_finger, priv->username);
+		r = store.print_data_save(print, session->enroll_finger, priv->username);
 		if (r < 0)
 			result = FP_ENROLL_FAIL;
 	}
@@ -650,20 +646,6 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 	}
 }
 
-static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
-	gint type)
-{
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-
-	if (type >= FP_STORAGES_COUNT) return FALSE;
-
-	storages[priv->storage_type].deinit();
-	priv->storage_type = type;
-	storages[priv->storage_type].init();
-
-	return TRUE;
-}
-
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
@@ -683,7 +665,7 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 		return;
 	}
 
-	prints = storages[priv->storage_type].discover_prints(priv->dev, priv->username);
+	prints = store.discover_prints(priv->dev, priv->username);
 	if (!prints) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
 			"Failed to discover prints");
@@ -720,7 +702,7 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 	}
 
 	for (i = LEFT_THUMB; i <= RIGHT_LITTLE; i++) {
-		storages[priv->storage_type].print_data_delete(priv->dev, i, priv->username);
+		store.print_data_delete(priv->dev, i, priv->username);
 	}
 
 	dbus_g_method_return(context);

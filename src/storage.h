@@ -22,8 +22,6 @@
 
 #define STORAGE_H
 
-#include "file_storage.h"
-
 typedef int (*storage_print_data_save)(struct fp_print_data *data,
 	enum fp_finger finger, const char *username);
 typedef int (*storage_print_data_load)(struct fp_dev *dev,
@@ -45,26 +43,8 @@ struct storage {
 
 typedef struct storage fp_storage;
 
-enum storage_type {
-	FP_FILE_STORAGE = 0,
-
-	FP_STORAGES_COUNT,
-};
-
-typedef enum storage_type fp_storage_type;
-
-fp_storage storages[FP_STORAGES_COUNT] = {
-	{
-		.init = &file_storage_init,
-		.deinit = &file_storage_deinit,
-		.print_data_save = &file_storage_print_data_save,
-		.print_data_load = &file_storage_print_data_load,
-		.print_data_delete = &file_storage_print_data_delete,
-		.discover_prints = &file_storage_discover_prints,
-	},
-
-};
-
+/* The currently setup store */
+fp_storage store;
 
 #endif
 

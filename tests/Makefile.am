@@ -5,12 +5,12 @@ CLEANFILES = $(BUILT_SOURCES)
 bin_PROGRAMS = verify enroll
 
 verify_SOURCES = verify.c
-verify_CFLAGS = $(AM_CFLAGS) $(DBUS_GLIB_CFLAGS)
-verify_LDADD = $(DBUS_GLIB_LIBS)
+verify_CFLAGS = $(AM_CFLAGS) $(GLIB_CFLAGS)
+verify_LDADD = $(GLIB_LIBS)
 
 enroll_SOURCES = enroll.c
-enroll_CFLAGS = $(AM_CFLAGS) $(DBUS_GLIB_CFLAGS)
-enroll_LDADD = $(DBUS_GLIB_LIBS)
+enroll_CFLAGS = $(AM_CFLAGS) $(GLIB_CFLAGS)
+enroll_LDADD = $(GLIB_LIBS)
 
 manager-dbus-glue.h: ../src/manager.xml
 	dbus-binding-tool --prefix=fprint_manager --mode=glib-client $< --output=$@

@@ -17,17 +17,13 @@ PKG_CHECK_MODULES(FPRINT, [libfprint > 0.1.0])
 AC_SUBST(FPRINT_LIBS)
 AC_SUBST(FPRINT_CFLAGS)
 
-PKG_CHECK_MODULES(GLIB, "glib-2.0")
+PKG_CHECK_MODULES(GLIB, glib-2.0 dbus-glib-1)
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 
-PKG_CHECK_MODULES(DBUS_GLIB, "dbus-glib-1")
-AC_SUBST(DBUS_GLIB_LIBS)
-AC_SUBST(DBUS_GLIB_CFLAGS)
-
-PKG_CHECK_MODULES(POLKIT, polkit >= 0.8 polkit-dbus)
-AC_SUBST(POLKIT_LIBS)
-AC_SUBST(POLKIT_CFLAGS)
+PKG_CHECK_MODULES(DAEMON, glib-2.0 dbus-glib-1 gmodule-2.0 polkit >= 0.8 polkit-dbus)
+AC_SUBST(DAEMON_LIBS)
+AC_SUBST(DAEMON_CFLAGS)
 
 AC_CHECK_PROG([POLKIT_POLICY_FILE_VALIDATE],
 	      [polkit-policy-file-validate], [polkit-policy-file-validate])
@@ -37,6 +33,8 @@ AS_AC_EXPAND(DATADIR, $datadir)
 DBUS_SERVICES_DIR="$DATADIR/dbus-1/services"
 AC_SUBST(DBUS_SERVICES_DIR)
 AC_DEFINE_UNQUOTED(DBUS_SERVICES_DIR, "$DBUS_SERVICES_DIR", [Where services dir for DBUS is])
+
+AC_DEFINE_UNQUOTED(SYSCONFDIR, "$sysconfdir", [Where the configuration file will be located])
 
 # Restore gnu89 inline semantics on gcc 4.3 and newer
 saved_cflags="$CFLAGS"
