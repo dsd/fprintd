@@ -15,6 +15,9 @@ polkit_in_files = net.reactivated.fprint.device.policy.in
 @INTLTOOL_POLICY_RULE@
 polkit_DATA = $(polkit_in_files:.policy.in=.policy)
 
+confdir = $(sysconfdir)/
+conf_DATA = fprintd.conf
+
 check:
 	$(POLKIT_POLICY_FILE_VALIDATE) $(polkit_DATA)
 
