@@ -16,3 +16,8 @@ Enforce command sequences:
 - Make storage per-manager
 - Move storage setting to a configuration file
 - Kill FromStorage variants, we should always load/read from our custom storage
+
+- Handle the client disconnecting without releasing the device
+- Check whether we actually want claim to open the device, or allow
+  some operations to not require claiming the device
+
