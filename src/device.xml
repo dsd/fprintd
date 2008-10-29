@@ -17,6 +17,10 @@
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
+		<method name="DeleteEnrolledFingers">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
 		<method name="VerifyStart">
 			<arg type="u" name="print_id" direction="in" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />

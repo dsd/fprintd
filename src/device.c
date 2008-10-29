@@ -53,6 +53,8 @@ static gboolean fprint_device_set_storage_type(FprintDevice *rdev,
 	gint type);
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev, 
 	DBusGMethodInvocation *context);
+static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
+	DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
@@ -698,5 +700,29 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	g_slist_free(prints);
 
 	dbus_g_method_return(context, ret);
+}
+
+static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
+						  DBusGMethodInvocation *context)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	GError *error = NULL;
+	guint i;
+
+	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	for (i = LEFT_THUMB; i <= RIGHT_LITTLE; i++) {
+		storages[priv->storage_type].print_data_delete(priv->dev, i, priv->username);
+	}
+
+	dbus_g_method_return(context);
 }
 
