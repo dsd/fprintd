@@ -4,20 +4,23 @@
 		<annotation name="org.freedesktop.DBus.GLib.CSymbol"
 			value="fprint_device" />
 
-		<method name="Claim">
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-		</method>
-
-		<method name="Release">
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-		</method>
-
 		<method name="ListEnrolledFingers">
+			<arg type="s" name="username" direction="in" />
 			<arg type="au" name="enrolled_fingers" direction="out" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
 		<method name="DeleteEnrolledFingers">
+			<arg type="s" name="username" direction="in" />
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
+		<method name="Claim">
+			<arg type="s" name="username" direction="in" />
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+		</method>
+
+		<method name="Release">
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
@@ -46,11 +49,6 @@
 		<signal name="EnrollStatus">
 			<arg type="i" name="result" />
 		</signal>
-
-		<method name="SetUsername">
-			<arg type="s" name="username" direction="in" />
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-		</method>
 
 	</interface>
 </node>

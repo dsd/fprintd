@@ -83,7 +83,7 @@ static void create_manager(void)
 		"net.reactivated.Fprint.Manager");
 }
 
-static DBusGProxy *open_device(void)
+static DBusGProxy *open_device(const char *username)
 {
 	GError *error = NULL;
 	GPtrArray *devices;
@@ -115,7 +115,7 @@ static DBusGProxy *open_device(void)
 	g_ptr_array_foreach(devices, (GFunc) g_free, NULL);
 	g_ptr_array_free(devices, TRUE);
 
-	if (!net_reactivated_Fprint_Device_claim(dev, &error))
+	if (!net_reactivated_Fprint_Device_claim(dev, username, &error))
 		g_error("failed to claim device: %s", error->message);
 	return dev;
 }
@@ -158,30 +158,20 @@ static void release_device(DBusGProxy *dev)
 		g_error("ReleaseDevice failed: %s", error->message);
 }
 
-static gboolean set_username(DBusGProxy *dev, const char *username)
-{
-	GError *error = NULL;
-	if (!net_reactivated_Fprint_Device_set_username(dev, username, &error)) {
-		g_error("SetUsename failed: %s", error->message);
-		return FALSE;
-	}
-	return TRUE;
-}
-
 int main(int argc, char **argv)
 {
 	GMainLoop *loop;
 	DBusGProxy *dev;
+	char *username;
 
 	g_type_init();
 	loop = g_main_loop_new(NULL, FALSE);
 	create_manager();
 
-	dev = open_device();
-	if (argc == 2) {
-		if (set_username(dev, argv[1]) == FALSE)
-			return 1;
-	}
+	username = NULL;
+	if (argc == 2)
+		username = argv[1];
+	dev = open_device(username);
 	do_enroll(dev);
 	release_device(dev);
 	return 0;

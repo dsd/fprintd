@@ -2,7 +2,7 @@ BUILT_SOURCES = manager-dbus-glue.h device-dbus-glue.h
 noinst_HEADERS = $(BUILT_SOURCES)
 CLEANFILES = $(BUILT_SOURCES)
 
-bin_PROGRAMS = verify enroll
+bin_PROGRAMS = verify enroll list
 
 verify_SOURCES = verify.c
 verify_CFLAGS = $(AM_CFLAGS) $(GLIB_CFLAGS)
@@ -11,6 +11,10 @@ verify_LDADD = $(GLIB_LIBS)
 enroll_SOURCES = enroll.c
 enroll_CFLAGS = $(AM_CFLAGS) $(GLIB_CFLAGS)
 enroll_LDADD = $(GLIB_LIBS)
+
+list_SOURCES = list.c
+list_CFLAGS = $(AM_CFLAGS) $(GLIB_CFLAGS)
+list_LDADD = $(GLIB_LIBS)
 
 manager-dbus-glue.h: ../src/manager.xml
 	dbus-binding-tool --prefix=fprint_manager --mode=glib-client $< --output=$@

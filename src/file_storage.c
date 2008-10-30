@@ -78,6 +78,12 @@ static char *get_path_to_print(struct fp_dev *dev, enum fp_finger finger, char *
 		fp_dev_get_devtype(dev), finger, base_store);
 }
 
+static char *get_path_to_print_dscv(struct fp_dscv_dev *dev, enum fp_finger finger, char *base_store)
+{
+	return __get_path_to_print(fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
+		fp_dscv_dev_get_devtype(dev), finger, base_store);
+}
+
 static int file_storage_get_basestore_for_username(const char *username, char **base_store)
 {
 	char *dirpath = FILE_STORAGE_PATH;
@@ -193,7 +199,7 @@ int file_storage_print_data_load(struct fp_dev *dev,
 	return 0;
 }
 
-int file_storage_print_data_delete(struct fp_dev *dev,
+int file_storage_print_data_delete(struct fp_dscv_dev *dev,
 	enum fp_finger finger, const char *username)
 {
 	int r;
@@ -205,7 +211,7 @@ int file_storage_print_data_delete(struct fp_dev *dev,
 		return r;
 	}
 
-	gchar *path = get_path_to_print(dev, finger, base_store);
+	gchar *path = get_path_to_print_dscv(dev, finger, base_store);
 
 	r = g_unlink(path);
 	g_free(path);
@@ -252,7 +258,7 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 	return list;
 }
 
-GSList *file_storage_discover_prints(struct fp_dev *dev, const char *username)
+GSList *file_storage_discover_prints(struct fp_dscv_dev *dev, const char *username)
 {
 	//GDir *dir;
 	//const gchar *ent;
@@ -270,12 +276,12 @@ GSList *file_storage_discover_prints(struct fp_dev *dev, const char *username)
 		return NULL;
 	}
 
-	storedir = get_path_to_storedir(fp_driver_get_driver_id(fp_dev_get_driver(dev)), 
-		fp_dev_get_devtype(dev), base_store);
+	storedir = get_path_to_storedir(fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
+		fp_dscv_dev_get_devtype(dev), base_store);
 
 	g_message("Entering %s", storedir);
-	list = scan_dev_storedir(storedir, fp_driver_get_driver_id(fp_dev_get_driver(dev)), 
-		fp_dev_get_devtype(dev), list);
+	list = scan_dev_storedir(storedir, fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
+		fp_dscv_dev_get_devtype(dev), list);
 
 	g_free(base_store);
 	g_free(storedir);

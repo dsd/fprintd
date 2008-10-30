@@ -34,11 +34,9 @@
 
 extern DBusGConnection *fprintd_dbus_conn;
 
-static void fprint_device_set_username(FprintDevice *rdev,
-	const char *username,
-	DBusGMethodInvocation *context);
 static void fprint_device_claim(FprintDevice *rdev,
-	DBusGMethodInvocation *context);
+				const char *username,
+				DBusGMethodInvocation *context);
 static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_verify_start(FprintDevice *rdev,
@@ -50,9 +48,11 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 static void fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev, 
-	DBusGMethodInvocation *context);
+						const char *username,
+						DBusGMethodInvocation *context);
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
-	DBusGMethodInvocation *context);
+						  const char *username,
+						  DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
@@ -310,33 +310,65 @@ _fprint_device_check_polkit_for_actions (FprintDevice *rdev,
 	return _fprint_device_check_polkit_for_action (rdev, context, action2, error);
 }
 
-static void
-fprint_device_set_username (FprintDevice *rdev,
-			    const char *username,
-			    DBusGMethodInvocation *context)
+static char *
+_fprint_device_check_for_username (FprintDevice *rdev,
+				   DBusGMethodInvocation *context,
+				   const char *username,
+				   char **ret_sender,
+				   GError **error)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-	GError *error = NULL;
+	DBusConnection *conn;
+	DBusError dbus_error;
+	char *sender;
+	unsigned long uid;
+	struct passwd *user;
+	char *client_username;
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	/* Get details about the current sender, and username/uid */
+	conn = dbus_g_connection_get_connection (fprintd_dbus_conn);
+	sender = dbus_g_method_get_sender (context);
+	dbus_error_init (&dbus_error);
+	uid = dbus_bus_get_unix_user (conn, sender, &dbus_error);
+
+	if (dbus_error_is_set(&dbus_error)) {
+		g_free (sender);
+		dbus_set_g_error (error, &dbus_error);
+		return NULL;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.setusername", &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	user = getpwuid (uid);
+	if (user == NULL) {
+		g_free (sender);
+		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
+			    "Failed to get information about user UID %lu", uid);
+		return NULL;
+	}
+	client_username = g_strdup (user->pw_name);
+
+	/* The current user is usually allowed to access their
+	 * own data, this should be followed by PolicyKit checks
+	 * anyway */
+	if (username == NULL || *username == '\0' || g_str_equal (username, client_username)) {
+		if (ret_sender != NULL)
+			*ret_sender = sender;
+		else
+			g_free (sender);
+		return client_username;
 	}
 
-	if (username == NULL) {
-		dbus_g_method_return (context);
-		return;
+	/* If we're not allowed to set a different username,
+	 * then fail */
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.setusername", error) == FALSE) {
+		g_free (sender);
+		return NULL;
 	}
 
-	g_free (priv->username);
-	priv->username = g_strdup (username);
+	if (ret_sender != NULL)
+		*ret_sender = sender;
+	else
+		g_free (sender);
 
-	dbus_g_method_return (context);
+	return g_strdup (username);
 }
 
 static void dev_open_cb(struct fp_dev *dev, int status, void *user_data)
@@ -364,15 +396,12 @@ static void dev_open_cb(struct fp_dev *dev, int status, void *user_data)
 }
 
 static void fprint_device_claim(FprintDevice *rdev,
-	DBusGMethodInvocation *context)
+				const char *username,
+				DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
-	DBusConnection *conn;
-	DBusError dbus_error;
-	char *sender;
-	unsigned long uid;
-	struct passwd *user;
+	char *sender, *user;
 	int r;
 
 	/* Is it already claimed? */
@@ -383,42 +412,36 @@ static void fprint_device_claim(FprintDevice *rdev,
 		return;
 	}
 
-	if (_fprint_device_check_polkit_for_actions (rdev, context,
-						     "net.reactivated.fprint.device.verify",
-						     "net.reactivated.fprint.device.enroll",
-						     &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
-	}
+	g_assert (priv->username == NULL);
+	g_assert (priv->sender == NULL);
 
-	/* Get details about the current sender, and username/uid */
-	conn = dbus_g_connection_get_connection (fprintd_dbus_conn);
-	sender = dbus_g_method_get_sender (context);
-	dbus_error_init (&dbus_error);
-	uid = dbus_bus_get_unix_user (conn, sender, &dbus_error);
-
-	if (dbus_error_is_set(&dbus_error)) {
+	sender = NULL;
+	user = _fprint_device_check_for_username (rdev,
+						  context,
+						  username,
+						  &sender,
+						  &error);
+	if (user == NULL) {
 		g_free (sender);
-		dbus_set_g_error (&error, &dbus_error);
-		dbus_g_method_return_error(context, error);
+		dbus_g_method_return_error (context, error);
 		g_error_free (error);
 		return;
 	}
 
-	user = getpwuid (uid);
-	if (user == NULL) {
+	if (_fprint_device_check_polkit_for_actions (rdev, context,
+						     "net.reactivated.fprint.device.verify",
+						     "net.reactivated.fprint.device.enroll",
+						     &error) == FALSE) {
 		g_free (sender);
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
-			"Failed to get information about user UID %lu", uid);
-		dbus_g_method_return_error(context, error);
+		g_free (user);
+		dbus_g_method_return_error (context, error);
 		return;
 	}
 
-	priv->username = g_strdup (user->pw_name);
+	priv->username = user;
 	priv->sender = sender;
 
-	g_message ("user claiming the device: %s (%ld)", priv->username, uid);
-	/* FIXME call polkit to check whether allowed */
+	g_message ("user claiming the device: %s", priv->username);
 
 	g_message("claiming device %d", priv->id);
 	priv->session = g_slice_new0(struct session_data);
@@ -478,6 +501,10 @@ static void fprint_device_release(FprintDevice *rdev,
 
 	session->context_release_device = context;
 	fp_async_dev_close(priv->dev, dev_close_cb, rdev);
+	g_free (priv->sender);
+	priv->sender = NULL;
+	g_free (priv->username);
+	priv->username = NULL;
 }
 
 static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
@@ -647,25 +674,37 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 }
 
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
-	DBusGMethodInvocation *context)
+						const char *username,
+						DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
 	GSList *prints;
 	GSList *item;
 	GArray *ret;
+	char *user;
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+	g_message ("orig username: %s", username);
+	user = _fprint_device_check_for_username (rdev,
+						  context,
+						  username,
+						  NULL,
+						  &error);
+	g_message ("user: %s", user);
+	if (user == NULL) {
 		dbus_g_method_return_error (context, error);
+		g_error_free (error);
 		return;
 	}
 
 	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
+		g_free (user);
 		dbus_g_method_return_error (context, error);
 		return;
 	}
 
-	prints = store.discover_prints(priv->dev, priv->username);
+	prints = store.discover_prints(priv->ddev, user);
+	g_free (user);
 	if (!prints) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_DISCOVER_PRINTS,
 			"Failed to discover prints");
@@ -685,25 +724,35 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 }
 
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
+						  const char *username,
 						  DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
 	guint i;
+	char *user;
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+	user = _fprint_device_check_for_username (rdev,
+						  context,
+						  username,
+						  NULL,
+						  &error);
+	if (user == NULL) {
 		dbus_g_method_return_error (context, error);
+		g_error_free (error);
 		return;
 	}
 
 	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
+		g_free (user);
 		dbus_g_method_return_error (context, error);
 		return;
 	}
 
 	for (i = LEFT_THUMB; i <= RIGHT_LITTLE; i++) {
-		store.print_data_delete(priv->dev, i, priv->username);
+		store.print_data_delete(priv->ddev, i, user);
 	}
+	g_free (user);
 
 	dbus_g_method_return(context);
 }
