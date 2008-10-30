@@ -237,7 +237,6 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 	while ((ent = g_dir_read_name(dir))) {
 		/* ent is an 1 hex character fp_finger code */
 		guint64 val;
-		int *list_item;
 		gchar *endptr;
 
 		if (*ent == 0 || strlen(ent) != 1)
@@ -249,9 +248,7 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 			continue;
 		}
 
-		list_item = g_slice_new(int);
-		*list_item = val;
-		list = g_slist_prepend(list, list_item);
+		list = g_slist_prepend(list, GINT_TO_POINTER(val));
 	}
 
 	g_dir_close(dir);

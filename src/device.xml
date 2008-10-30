@@ -33,6 +33,10 @@
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
+		<signal name="VerifyFingerSelected">
+			<arg type="i" name="finger_num" />
+		</signal>
+
 		<signal name="VerifyStatus">
 			<arg type="i" name="result" />
 		</signal>

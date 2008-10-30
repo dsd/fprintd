@@ -25,6 +25,9 @@
 
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
+static int finger_num = -1;
+static gboolean g_fatal_warnings = FALSE;
+static char **usernames = NULL;
 
 enum fp_verify_result {
 	VERIFY_NO_MATCH = 0,
@@ -91,6 +94,8 @@ static const char *fingerstr(guint32 fingernum)
 		return "Right ring finger";
 	case RIGHT_LITTLE:
 		return "Right little finger";
+	case -1:
+		return "First fingerprint available";
 	default:
 		return "Unknown finger";
 	}
@@ -146,7 +151,7 @@ static DBusGProxy *open_device(const char *username)
 	return dev;
 }
 
-static guint32 find_finger(DBusGProxy *dev, const char *username)
+static void find_finger(DBusGProxy *dev, const char *username)
 {
 	GError *error = NULL;
 	GArray *fingers;
@@ -169,10 +174,6 @@ static guint32 find_finger(DBusGProxy *dev, const char *username)
 
 	fingernum = g_array_index(fingers, guint32, 0);
 	g_array_free(fingers, TRUE);
-
-	g_print("Verifying: %s\n", fingerstr(fingernum));
-
-	return fingernum;
 }
 
 static void verify_result(GObject *object, int result, void *user_data)
@@ -183,14 +184,22 @@ static void verify_result(GObject *object, int result, void *user_data)
 		*verify_completed = TRUE;
 }
 
-static void do_verify(DBusGProxy *dev, guint32 finger_num)
+static void verify_finger_selected(GObject *object, int finger, void *user_data)
+{
+	g_print("Verifying: %s\n", fingerstr(finger));
+}
+
+static void do_verify(DBusGProxy *dev)
 {
 	GError *error;
 	gboolean verify_completed = FALSE;
 
 	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_INT, NULL);
+	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_INT, NULL);
 	dbus_g_proxy_connect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result),
 		&verify_completed, NULL);
+	dbus_g_proxy_connect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected),
+		NULL, NULL);
 
 	if (!net_reactivated_Fprint_Device_verify_start(dev, finger_num, &error))
 		g_error("VerifyStart failed: %s", error->message);
@@ -199,6 +208,7 @@ static void do_verify(DBusGProxy *dev, guint32 finger_num)
 		g_main_context_iteration(NULL, TRUE);
 
 	dbus_g_proxy_disconnect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result), &verify_completed);
+	dbus_g_proxy_disconnect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected), NULL);
 
 	if (!net_reactivated_Fprint_Device_verify_stop(dev, &error))
 		g_error("VerifyStop failed: %s", error->message);
@@ -211,24 +221,52 @@ static void release_device(DBusGProxy *dev)
 		g_error("ReleaseDevice failed: %s", error->message);
 }
 
+static const GOptionEntry entries[] = {
+	{ "finger", 'f',  0, G_OPTION_ARG_INT, &finger_num, "Finger selected to verify (default is automatic)", NULL },
+	{"g-fatal-warnings", 0, 0, G_OPTION_ARG_NONE, &g_fatal_warnings, "Make all warnings fatal", NULL},
+ 	{ G_OPTION_REMAINING, '\0', 0, G_OPTION_ARG_STRING_ARRAY, &usernames, NULL, "[username]" },
+	{ NULL }
+};
+
 int main(int argc, char **argv)
 {
+	GOptionContext *context;
 	GMainLoop *loop;
+	GError *err = NULL;
 	DBusGProxy *dev;
-	guint32 finger_num;
 	char *username;
 
 	g_type_init();
+
+	context = g_option_context_new ("Verify a fingerprint");
+	g_option_context_add_main_entries (context, entries, NULL);
+
+	if (g_option_context_parse (context, &argc, &argv, &err) == FALSE) {
+		g_print ("couldn't parse command-line options: %s\n", err->message);
+		g_error_free (err);
+		return 1;
+	}
+
+	if (usernames == NULL) {
+		username = "";
+	} else {
+		username = usernames[0];
+	}
+
+	if (g_fatal_warnings) {
+		GLogLevelFlags fatal_mask;
+
+		fatal_mask = g_log_set_always_fatal (G_LOG_FATAL_MASK);
+		fatal_mask |= G_LOG_LEVEL_WARNING | G_LOG_LEVEL_CRITICAL;
+		g_log_set_always_fatal (fatal_mask);
+	}
+
 	loop = g_main_loop_new(NULL, FALSE);
 	create_manager();
 
-	username = NULL;
-	if (argc == 2)
-		username = argv[1];
-
 	dev = open_device(username);
-	finger_num = find_finger(dev, username);
-	do_verify(dev, finger_num);
+	find_finger(dev, username);
+	do_verify(dev);
 	release_device(dev);
 	return 0;
 }

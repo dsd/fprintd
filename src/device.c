@@ -104,6 +104,7 @@ enum fprint_device_properties {
 
 enum fprint_device_signals {
 	SIGNAL_VERIFY_STATUS,
+	SIGNAL_VERIFY_FINGER_SELECTED,
 	SIGNAL_ENROLL_STATUS,
 	NUM_SIGNALS,
 };
@@ -156,6 +157,9 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
 		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 	signals[SIGNAL_ENROLL_STATUS] = g_signal_new("enroll-status",
+		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
+	signals[SIGNAL_VERIFY_FINGER_SELECTED] = g_signal_new("verify-finger-selected",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
 		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 }
@@ -523,7 +527,7 @@ static void identify_cb(struct fp_dev *dev, int r,
 			 size_t match_offset, struct fp_img *img, void *user_data)
 {
 	struct FprintDevice *rdev = user_data;
-	g_message("verify_cb: result %d", r);
+	g_message("identify_cb: result %d", r);
 
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, r);
 	fp_img_free(img);
@@ -554,6 +558,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		prints = store.discover_prints(priv->ddev, priv->username);
 		if (prints == NULL) {
 			//FIXME exit
+			g_message ("NO PRINTS");
 			return;
 		}
 		if (fp_dev_supports_identification(priv->dev)) {
@@ -563,23 +568,30 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			array = g_ptr_array_new ();
 
 			for (l = prints; l != NULL; l = l->next) {
-				r = store.print_data_load(priv->dev, (enum fp_finger) l->data, 
+				g_message ("adding finger %d to the gallery", GPOINTER_TO_INT (l->data));
+				r = store.print_data_load(priv->dev, GPOINTER_TO_INT (l->data),
 							  &data, priv->username);
 				//FIXME r < 0 ?
 				g_ptr_array_add (array, data);
 			}
-			g_slist_free (l);
-			gallery = (struct fp_print_data **) g_ptr_array_free (array, FALSE);
 			data = NULL;
+
+			if (array->len > 0) {
+				g_ptr_array_add (array,  NULL);
+				gallery = (struct fp_print_data **) g_ptr_array_free (array, FALSE);
+			} else {
+				gallery = NULL;
+			}
 		} else {
-			finger_num = (enum fp_finger) prints->data;
+			finger_num = GPOINTER_TO_INT (prints->data);
 		}
 		g_slist_free(prints);
 	}
 
-	if (fp_dev_supports_identification(priv->dev)) {
+	if (fp_dev_supports_identification(priv->dev) && finger_num == -1) {
 		if (gallery == NULL) {
 			//FIXME exit
+			g_message ("NO GALLERY");
 			return;
 		}
 		priv->is_identify = TRUE;
@@ -601,7 +613,11 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			dbus_g_method_return_error(context, error);
 			return;
 		}
-	
+
+		/* Emit VerifyFingerSelected telling the front-end which finger
+		 * we selected for auth */
+		g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED], 0, finger_num);
+
 		/* FIXME fp_async_verify_start should copy the fp_print_data */
 		r = fp_async_verify_start(priv->dev, data, verify_cb, rdev);
 	}
@@ -785,8 +801,7 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 
 	ret = g_array_new(FALSE, FALSE, sizeof(int));
 	for (item = prints; item; item = item->next) {
-		int *fingerptr = (int *)item->data;
-		ret = g_array_append_val(ret, *fingerptr);
+		ret = g_array_append_val(ret, item->data);
 	}
 
 	g_slist_free(prints);
