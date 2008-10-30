@@ -83,12 +83,15 @@ struct FprintDevicePrivate {
 	/* The current user of the device, if claimed */
 	char *sender;
 
-	/* Either the current user of the device, or if allowed,
-	 * what was set using SetUsername */
+	/* The current user of the device, or if allowed,
+	 * what was passed as a username argument */
 	char *username;
 
 	/* type of storage */
 	int storage_type;
+
+	/* whether we're running an identify, or a verify */
+	gboolean is_identify;
 };
 
 typedef struct FprintDevicePrivate FprintDevicePrivate;
@@ -441,7 +444,7 @@ static void fprint_device_claim(FprintDevice *rdev,
 	priv->username = user;
 	priv->sender = sender;
 
-	g_message ("user '%s' claiming the device: %s", priv->username, priv->id);
+	g_message ("user '%s' claiming the device: %d", priv->username, priv->id);
 
 	priv->session = g_slice_new0(struct session_data);
 	priv->session->context_claim_device = context;
@@ -507,7 +510,17 @@ static void fprint_device_release(FprintDevice *rdev,
 }
 
 static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
-	void *user_data)
+		      void *user_data)
+{
+	struct FprintDevice *rdev = user_data;
+	g_message("verify_cb: result %d", r);
+
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, r);
+	fp_img_free(img);
+}
+
+static void identify_cb(struct fp_dev *dev, int r,
+			 size_t match_offset, struct fp_img *img, void *user_data)
 {
 	struct FprintDevice *rdev = user_data;
 	g_message("verify_cb: result %d", r);
@@ -520,6 +533,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 	guint32 finger_num, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	struct fp_print_data **gallery = NULL;
 	struct fp_print_data *data = NULL;
 	GError *error = NULL;
 	int r;
@@ -534,22 +548,73 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		return;
 	}
 
-	g_message("start verification device %d finger %d", priv->id, finger_num);
+	if (finger_num == -1) {
+		GSList *prints;
 
-	r = store.print_data_load(priv->dev, (enum fp_finger)finger_num, 
-				  &data, priv->username);
+		prints = store.discover_prints(priv->ddev, priv->username);
+		if (prints == NULL) {
+			//FIXME exit
+			return;
+		}
+		if (fp_dev_supports_identification(priv->dev)) {
+			GSList *l;
+			GPtrArray *array;
 
-	if (r < 0 || !data) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
-			"No such print %d", finger_num);
-		dbus_g_method_return_error(context, error);
-		return;
+			array = g_ptr_array_new ();
+
+			for (l = prints; l != NULL; l = l->next) {
+				r = store.print_data_load(priv->dev, (enum fp_finger) l->data, 
+							  &data, priv->username);
+				//FIXME r < 0 ?
+				g_ptr_array_add (array, data);
+			}
+			g_slist_free (l);
+			gallery = (struct fp_print_data **) g_ptr_array_free (array, FALSE);
+			data = NULL;
+		} else {
+			finger_num = (enum fp_finger) prints->data;
+		}
+		g_slist_free(prints);
 	}
+
+	if (fp_dev_supports_identification(priv->dev)) {
+		if (gallery == NULL) {
+			//FIXME exit
+			return;
+		}
+		priv->is_identify = TRUE;
+
+		g_message ("start identification device %d", priv->id);
+		//FIXME we're supposed to free the gallery here?
+		r = fp_async_identify_start (priv->dev, gallery, identify_cb, rdev);
+	} else {
+		priv->is_identify = FALSE;
+
+		g_message("start verification device %d finger %d", priv->id, finger_num);
+
+		r = store.print_data_load(priv->dev, (enum fp_finger)finger_num, 
+					  &data, priv->username);
+
+		if (r < 0 || !data) {
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
+				    "No such print %d", finger_num);
+			dbus_g_method_return_error(context, error);
+			return;
+		}
 	
-	/* FIXME fp_async_verify_start should copy the fp_print_data */
-	r = fp_async_verify_start(priv->dev, data, verify_cb, rdev);
+		/* FIXME fp_async_verify_start should copy the fp_print_data */
+		r = fp_async_verify_start(priv->dev, data, verify_cb, rdev);
+	}
+
 	if (r < 0) {
-		fp_print_data_free (data);
+		if (data != NULL) {
+			fp_print_data_free (data);
+		} else if (gallery != NULL) {
+			guint i;
+			for (i = 0; gallery[i] != NULL; i++)
+				fp_print_data_free(gallery[i]);
+			g_free (gallery);
+		}
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_START,
 			"Verify start failed with error %d", r);
 		dbus_g_method_return_error(context, error);
@@ -560,6 +625,11 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 }
 
 static void verify_stop_cb(struct fp_dev *dev, void *user_data)
+{
+	dbus_g_method_return((DBusGMethodInvocation *) user_data);
+}
+
+static void identify_stop_cb(struct fp_dev *dev, void *user_data)
 {
 	dbus_g_method_return((DBusGMethodInvocation *) user_data);
 }
@@ -581,7 +651,11 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		return;
 	}
 
-	r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
+	if (priv->is_identify == FALSE) {
+		r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
+	} else {
+		r = fp_async_identify_stop(priv->dev, identify_stop_cb, context);
+	}
 	if (r < 0) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_STOP,
 			"Verify stop failed with error %d", r);
