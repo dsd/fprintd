@@ -441,9 +441,8 @@ static void fprint_device_claim(FprintDevice *rdev,
 	priv->username = user;
 	priv->sender = sender;
 
-	g_message ("user claiming the device: %s", priv->username);
+	g_message ("user '%s' claiming the device: %s", priv->username, priv->id);
 
-	g_message("claiming device %d", priv->id);
 	priv->session = g_slice_new0(struct session_data);
 	priv->session->context_claim_device = context;
 
@@ -684,13 +683,11 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	GArray *ret;
 	char *user;
 
-	g_message ("orig username: %s", username);
 	user = _fprint_device_check_for_username (rdev,
 						  context,
 						  username,
 						  NULL,
 						  &error);
-	g_message ("user: %s", user);
 	if (user == NULL) {
 		dbus_g_method_return_error (context, error);
 		g_error_free (error);
