@@ -10,3 +10,11 @@ Enforce command sequences:
  only allow VerifyStop during a verification
  etc
 
+Add Device Properties:
+- device name
+
+Rethink enums and results passed, should be strings and D-Bus errors
+
+Register fprintd' po file with Transifex, Rosetta or the Translation Project
+
+
