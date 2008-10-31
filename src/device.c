@@ -615,13 +615,14 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			return;
 		}
 
-		/* Emit VerifyFingerSelected telling the front-end which finger
-		 * we selected for auth */
-		g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED], 0, finger_num);
-
 		/* FIXME fp_async_verify_start should copy the fp_print_data */
 		r = fp_async_verify_start(priv->dev, data, verify_cb, rdev);
 	}
+
+	/* Emit VerifyFingerSelected telling the front-end which finger
+	 * we selected for auth */
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED], 0, finger_num);
+
 
 	if (r < 0) {
 		if (data != NULL) {
