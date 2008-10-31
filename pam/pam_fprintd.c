@@ -347,6 +347,8 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	const char *username;
 	int r;
 
+	g_type_init ();
+
 	pam_get_item(pamh, PAM_RHOST, (const void **)(const void*) &rhost);
 	if (rhost != NULL && strlen(rhost) > 0) {
 		/* remote login (e.g. over SSH) */
