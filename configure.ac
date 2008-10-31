@@ -25,6 +25,25 @@ PKG_CHECK_MODULES(DAEMON, glib-2.0 dbus-glib-1 gmodule-2.0 polkit >= 0.8 polkit-
 AC_SUBST(DAEMON_LIBS)
 AC_SUBST(DAEMON_CFLAGS)
 
+AC_ARG_ENABLE(pam, AC_HELP_STRING([--enable-pam],[Build the fprintd PAM module]), enable_pam="$enableval", enable_pam=yes)
+has_pam=no
+if test x$enable_pam = xyes; then
+	has_pam=yes
+	AC_CHECK_HEADER([security/pam_modules.h], [has_pam=yes] , [has_pam=no])
+	if test x$has_pam = xyes; then
+		has_pam=no
+		AC_CHECK_LIB(pam, pam_start, [PAM_LIBS="-lpam"
+					      has_pam=yes],
+			has_pam=no)
+	fi
+	AC_SUBST(PAM_LIBS)
+fi
+AM_CONDITIONAL(HAVE_PAM, test "x$has_pam" = "xyes")
+
+AC_MSG_CHECKING(for PAM headers and library)
+AC_MSG_RESULT([$has_pam])
+
+
 AC_CHECK_PROG([POLKIT_POLICY_FILE_VALIDATE],
 	      [polkit-policy-file-validate], [polkit-policy-file-validate])
 
@@ -36,15 +55,8 @@ AC_DEFINE_UNQUOTED(DBUS_SERVICES_DIR, "$DBUS_SERVICES_DIR", [Where services dir 
 
 AC_DEFINE_UNQUOTED(SYSCONFDIR, "$sysconfdir", [Where the configuration file will be located])
 
-# Restore gnu89 inline semantics on gcc 4.3 and newer
-saved_cflags="$CFLAGS"
-CFLAGS="$CFLAGS -fgnu89-inline"
-AC_COMPILE_IFELSE(AC_LANG_PROGRAM([]), inline_cflags="-fgnu89-inline", inline_cflags="")
-CFLAGS="$saved_cflags"
+GNOME_COMPILE_WARNINGS
 
-AM_CFLAGS="-std=gnu99 $inline_cflags -Wall -Wundef -Wunused -Wstrict-prototypes -Werror-implicit-function-declaration -Wno-pointer-sign -Wshadow"
-AC_SUBST(AM_CFLAGS)
-
-AC_CONFIG_FILES([Makefile] [src/Makefile] [data/Makefile] [tests/Makefile] [po/Makefile.in])
+AC_CONFIG_FILES([Makefile] [src/Makefile] [data/Makefile] [tests/Makefile] [pam/Makefile] [po/Makefile.in])
 AC_OUTPUT
 
