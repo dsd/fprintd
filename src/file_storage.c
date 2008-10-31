@@ -37,6 +37,8 @@
 
 #include <libfprint/fprint.h>
 
+#include "file_storage.h"
+
 #define DIR_PERMS 0700
 
 #ifndef FILE_STORAGE_PATH
@@ -97,9 +99,7 @@ int file_storage_print_data_save(struct fp_print_data *data,
 	enum fp_finger finger, const char *username)
 {
 	GError *err = NULL;
-	char *path;
-	char *dirpath;
-	unsigned char *buf;
+	char *path, *dirpath, *buf;
 	size_t len;
 	int r;
 	char *base_store = NULL;
@@ -110,7 +110,7 @@ int file_storage_print_data_save(struct fp_print_data *data,
 		return r;
 	}
 
-	len = fp_print_data_get_data(data, &buf);
+	len = fp_print_data_get_data(data, (guchar **) &buf);
 	if (!len) {
 		g_free(base_store);
 		return -ENOMEM;
@@ -145,7 +145,7 @@ int file_storage_print_data_save(struct fp_print_data *data,
 static int load_from_file(char *path, struct fp_print_data **data)
 {
 	gsize length;
-	gchar *contents;
+	char *contents;
 	GError *err = NULL;
 	struct fp_print_data *fdata;
 
@@ -161,7 +161,7 @@ static int load_from_file(char *path, struct fp_print_data **data)
 			return r;
 	}
 
-	fdata = fp_print_data_from_data(contents, length);
+	fdata = fp_print_data_from_data((guchar *) contents, length);
 	g_free(contents);
 	if (!fdata)
 		return -EIO;
