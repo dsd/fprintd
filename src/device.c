@@ -557,8 +557,9 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 
 		prints = store.discover_prints(priv->ddev, priv->username);
 		if (prints == NULL) {
-			//FIXME exit
-			g_message ("NO PRINTS");
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
+				    "No fingerprints enrolled");
+			dbus_g_method_return_error(context, error);
 			return;
 		}
 		if (fp_dev_supports_identification(priv->dev)) {
