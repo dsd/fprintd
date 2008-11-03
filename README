@@ -10,6 +10,9 @@ Written in C. Requires bleeding edge libfprint (libusb-1.0 port).
 
 Licensed under the GPL version 2 (see COPYING).
 
+An experimental PAM login module is included in the 'pam' directory.
+This will be moved to a separate package once the system has matured.
+
 API use cases
 =============
 

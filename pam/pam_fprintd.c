@@ -3,6 +3,9 @@
  * Copyright (C) 2007 Daniel Drake <dsd@gentoo.org>
  * Copyright (C) 2008 Bastien Nocera <hadess@hadess.net>
  * 
+ * Experimental code. This will be moved out of fprintd into it's own
+ * package once the system has matured.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
