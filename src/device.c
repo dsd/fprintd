@@ -59,7 +59,8 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 typedef enum {
 	ACTION_NONE = 0,
 	ACTION_IDENTIFY,
-	ACTION_VERIFY
+	ACTION_VERIFY,
+	ACTION_ENROLL
 } FprintDeviceAction;
 
 struct session_data {
@@ -556,8 +557,13 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 	}
 
 	if (priv->current_action != ACTION_NONE) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-			    "Verification already in progress");
+		if (priv->current_action == ACTION_ENROLL) {
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				    "Enrollment in progress");
+		} else {
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				    "Verification already in progress");
+		}
 		dbus_g_method_return_error(context, error);
 		g_error_free (error);
 		return;
@@ -740,6 +746,19 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 		return;
 	}
 
+	if (priv->current_action != ACTION_NONE) {
+		if (priv->current_action == ACTION_ENROLL) {
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				    "Enrollment already in progress");
+		} else {
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				    "Verification in progress");
+		}
+		dbus_g_method_return_error(context, error);
+		g_error_free (error);
+		return;
+	}
+
 	g_message("start enrollment device %d finger %d", priv->id, finger_num);
 	session->enroll_finger = finger_num;
 	
@@ -750,6 +769,8 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 		dbus_g_method_return_error(context, error);
 		return;
 	}
+
+	priv->current_action = ACTION_ENROLL;
 
 	dbus_g_method_return(context);
 }
@@ -776,13 +797,23 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 		return;
 	}
 
+	if (priv->current_action != ACTION_ENROLL) {
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ENROLL_STOP,
+			    "No enrollment in progress");
+		dbus_g_method_return_error(context, error);
+		g_error_free (error);
+		return;
+	}
+
 	r = fp_async_enroll_stop(priv->dev, enroll_stop_cb, context);
 	if (r < 0) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ENROLL_STOP,
 			"Enroll stop failed with error %d", r);
 		dbus_g_method_return_error(context, error);
-		return;
+		g_error_free (error);
 	}
+
+	priv->current_action = ACTION_NONE;
 }
 
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
