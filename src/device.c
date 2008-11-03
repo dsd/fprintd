@@ -56,6 +56,12 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 
 #include "device-dbus-glue.h"
 
+typedef enum {
+	ACTION_NONE = 0,
+	ACTION_IDENTIFY,
+	ACTION_VERIFY
+} FprintDeviceAction;
+
 struct session_data {
 	/* finger being enrolled */
 	int enroll_finger;
@@ -65,11 +71,6 @@ struct session_data {
 
 	/* method invocation for async ReleaseDevice() */
 	DBusGMethodInvocation *context_release_device;
-};
-
-struct loaded_print {
-	guint32 id;
-	struct fp_print_data *data;
 };
 
 struct FprintDevicePrivate {
@@ -91,7 +92,7 @@ struct FprintDevicePrivate {
 	int storage_type;
 
 	/* whether we're running an identify, or a verify */
-	gboolean is_identify;
+	FprintDeviceAction current_action;
 };
 
 typedef struct FprintDevicePrivate FprintDevicePrivate;
@@ -544,11 +545,21 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
+		g_error_free (error);
 		return;
 	}
 
 	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
+		g_error_free (error);
+		return;
+	}
+
+	if (priv->current_action != ACTION_NONE) {
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+			    "Verification already in progress");
+		dbus_g_method_return_error(context, error);
+		g_error_free (error);
 		return;
 	}
 
@@ -595,13 +606,13 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			g_message ("NO GALLERY");
 			return;
 		}
-		priv->is_identify = TRUE;
+		priv->current_action = ACTION_IDENTIFY;
 
 		g_message ("start identification device %d", priv->id);
 		//FIXME we're supposed to free the gallery here?
 		r = fp_async_identify_start (priv->dev, gallery, identify_cb, rdev);
 	} else {
-		priv->is_identify = FALSE;
+		priv->current_action = ACTION_VERIFY;
 
 		g_message("start verification device %d finger %d", priv->id, finger_num);
 
@@ -669,16 +680,26 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		return;
 	}
 
-	if (priv->is_identify == FALSE) {
+	if (priv->current_action == ACTION_VERIFY) {
 		r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
-	} else {
+	} else if (priv->current_action == ACTION_IDENTIFY) {
 		r = fp_async_identify_stop(priv->dev, identify_stop_cb, context);
+	} else {
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_STOP,
+			    "No verification in progress");
+		dbus_g_method_return_error(context, error);
+		g_error_free (error);
+		return;
 	}
+
 	if (r < 0) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_VERIFY_STOP,
 			"Verify stop failed with error %d", r);
 		dbus_g_method_return_error(context, error);
+		g_error_free (error);
 	}
+
+	priv->current_action = ACTION_NONE;
 }
 
 static void enroll_stage_cb(struct fp_dev *dev, int result,
