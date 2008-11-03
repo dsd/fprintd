@@ -24,8 +24,10 @@
 #include <dbus/dbus-glib.h>
 
 /* General */
+#define TIMEOUT 30
 #define FPRINT_SERVICE_NAME "net.reactivated.Fprint"
 extern DBusGConnection *fprintd_dbus_conn;
+extern gboolean no_timeout;
 GQuark fprint_error_quark(void);
 
 /* Errors */

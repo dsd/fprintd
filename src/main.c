@@ -34,6 +34,7 @@
 #include "file_storage.h"
 
 DBusGConnection *fprintd_dbus_conn = NULL;
+gboolean no_timeout = FALSE;
 static gboolean g_fatal_warnings = FALSE;
 
 GQuark fprint_error_quark(void)
@@ -287,6 +288,7 @@ bail:
 
 static const GOptionEntry entries[] = {
 	{"g-fatal-warnings", 0, 0, G_OPTION_ARG_NONE, &g_fatal_warnings, "Make all warnings fatal", NULL},
+	{"no-timeout", 't', 0, G_OPTION_ARG_NONE, &no_timeout, "Do not exit after unused for a while", NULL},
 	{ NULL }
 };
 
