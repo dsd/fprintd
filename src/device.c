@@ -31,6 +31,7 @@
 
 #include "fprintd.h"
 #include "storage.h"
+#include "egg-dbus-monitor.h"
 
 extern DBusGConnection *fprintd_dbus_conn;
 
@@ -92,6 +93,9 @@ struct FprintDevicePrivate {
 	/* type of storage */
 	int storage_type;
 
+	/* Hashtable of connected clients */
+	GHashTable *clients;
+
 	/* whether we're running an identify, or a verify */
 	FprintDeviceAction current_action;
 };
@@ -102,7 +106,7 @@ typedef struct FprintDevicePrivate FprintDevicePrivate;
 
 enum fprint_device_properties {
 	FPRINT_DEVICE_CONSTRUCT_DDEV = 1,
-	FPRINT_DEVICE_ACTION,
+	FPRINT_DEVICE_IN_USE,
 };
 
 enum fprint_device_signals {
@@ -118,6 +122,10 @@ static guint signals[NUM_SIGNALS] = { 0, };
 
 static void fprint_device_finalize(GObject *object)
 {
+	FprintDevice *self = (FprintDevice *) object;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
+
+	g_hash_table_destroy (priv->clients);
 	/* FIXME close and stuff */
 }
 
@@ -144,24 +152,13 @@ static void fprint_device_get_property(GObject *object, guint property_id,
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
 
 	switch (property_id) {
-	case FPRINT_DEVICE_ACTION:
-		g_value_set_int(value, priv->current_action);
+	case FPRINT_DEVICE_IN_USE:
+		g_value_set_boolean(value, g_hash_table_size (priv->clients) != 0);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
 		break;
 	}
-}
-
-static void fprint_device_set_action(FprintDevice *device, FprintDeviceAction action)
-{
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(device);
-
-	if (priv->current_action == action)
-		return;
-
-	priv->current_action = action;
-	g_object_notify (G_OBJECT(device), "action");
 }
 
 static void fprint_device_class_init(FprintDeviceClass *klass)
@@ -183,11 +180,11 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 		G_PARAM_CONSTRUCT_ONLY | G_PARAM_WRITABLE);
 	g_object_class_install_property(gobject_class,
 		FPRINT_DEVICE_CONSTRUCT_DDEV, pspec);
-	pspec = g_param_spec_int("action", "Current device action",
-				 "The current device action", ACTION_NONE, ACTION_ENROLL,
-				 ACTION_NONE, G_PARAM_READABLE);
+	pspec = g_param_spec_boolean("in-use", "In use",
+				 "Whether the device is currently in use", FALSE,
+				 G_PARAM_READABLE);
 	g_object_class_install_property(gobject_class,
-					FPRINT_DEVICE_ACTION, pspec);
+					FPRINT_DEVICE_IN_USE, pspec);
 
 	signals[SIGNAL_VERIFY_STATUS] = g_signal_new("verify-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
@@ -247,6 +244,10 @@ static void fprint_device_init(FprintDevice *device)
 		polkit_context_unref (priv->pol_ctx);
 		priv->pol_ctx = NULL;
 	}
+	priv->clients = g_hash_table_new_full (g_str_hash,
+					       g_str_equal,
+					       g_free,
+					       g_object_unref);
 }
 
 G_DEFINE_TYPE(FprintDevice, fprint_device, G_TYPE_OBJECT);
@@ -414,6 +415,82 @@ _fprint_device_check_for_username (FprintDevice *rdev,
 	return g_strdup (username);
 }
 
+static void action_stop_cb(struct fp_dev *dev, void *user_data)
+{
+	gboolean *done = (gboolean *) user_data;
+	*done = TRUE;
+}
+
+static void
+_fprint_device_client_disconnected (EggDbusMonitor *monitor, gboolean connected, FprintDevice *rdev)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+
+	if (connected == FALSE) {
+		const char *sender;
+		sender = egg_dbus_monitor_get_service (monitor);
+
+		/* Was that the client that claimed the device? */
+		if (priv->sender != NULL) {
+			gboolean done = FALSE;
+			switch (priv->current_action) {
+			case ACTION_NONE:
+				break;
+			case ACTION_IDENTIFY:
+				fp_async_identify_stop(priv->dev, action_stop_cb, &done);
+				while (done == FALSE)
+					g_main_context_iteration (NULL, TRUE);
+				break;
+			case ACTION_VERIFY:
+				fp_async_verify_stop(priv->dev, action_stop_cb, &done);
+				while (done == FALSE)
+					g_main_context_iteration (NULL, TRUE);
+				break;
+			case ACTION_ENROLL:
+				fp_async_enroll_stop(priv->dev, action_stop_cb, &done);
+				while (done == FALSE)
+					g_main_context_iteration (NULL, TRUE);
+				break;
+			}
+			priv->current_action = ACTION_NONE;
+			done = FALSE;
+
+			/* Close the claimed device as well */
+			fp_async_dev_close (priv->dev, action_stop_cb, &done);
+			while (done == FALSE)
+				g_main_context_iteration (NULL, TRUE);
+
+			g_free (priv->sender);
+			priv->sender = NULL;
+			g_free (priv->username);
+			priv->username = NULL;
+		}
+		g_hash_table_remove (priv->clients, sender);
+	}
+
+	if (g_hash_table_size (priv->clients) == 0) {
+		g_object_notify (G_OBJECT (rdev), "in-use");
+	}
+}
+
+static void
+_fprint_device_add_client (FprintDevice *rdev, const char *sender)
+{
+	EggDbusMonitor *monitor;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+
+	monitor = g_hash_table_lookup (priv->clients, sender);
+	if (monitor == NULL) {
+		monitor = egg_dbus_monitor_new ();
+		egg_dbus_monitor_assign (monitor, fprintd_dbus_conn, sender);
+		//FIXME handle replaced
+		g_signal_connect (G_OBJECT (monitor), "connection-changed",
+					 G_CALLBACK (_fprint_device_client_disconnected), rdev);
+		g_hash_table_insert (priv->clients, g_strdup (sender), monitor);
+		g_object_notify (G_OBJECT (rdev), "in-use");
+	}
+}
+
 static void dev_open_cb(struct fp_dev *dev, int status, void *user_data)
 {
 	FprintDevice *rdev = user_data;
@@ -481,6 +558,8 @@ static void fprint_device_claim(FprintDevice *rdev,
 		return;
 	}
 
+	_fprint_device_add_client (rdev, sender);
+
 	priv->username = user;
 	priv->sender = sender;
 
@@ -493,6 +572,12 @@ static void fprint_device_claim(FprintDevice *rdev,
 	if (r < 0) {
 		g_slice_free(struct session_data, priv->session);
 		priv->session = NULL;
+
+		g_free (priv->username);
+		priv->username = NULL;
+		g_free (priv->sender);
+		priv->sender = NULL;
+
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
 			"Could not attempt device open, error %d", r);
 		dbus_g_method_return_error(context, error);
@@ -543,10 +628,6 @@ static void fprint_device_release(FprintDevice *rdev,
 
 	session->context_release_device = context;
 	fp_async_dev_close(priv->dev, dev_close_cb, rdev);
-	g_free (priv->sender);
-	priv->sender = NULL;
-	g_free (priv->username);
-	priv->username = NULL;
 }
 
 static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
@@ -642,17 +723,19 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 
 	if (fp_dev_supports_identification(priv->dev) && finger_num == -1) {
 		if (gallery == NULL) {
-			//FIXME exit
-			g_message ("NO GALLERY");
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
+				    "No fingerprints on that device");
+			dbus_g_method_return_error(context, error);
+			g_error_free (error);
 			return;
 		}
-		fprint_device_set_action (rdev, ACTION_IDENTIFY);
+		priv->current_action = ACTION_IDENTIFY;
 
 		g_message ("start identification device %d", priv->id);
 		//FIXME we're supposed to free the gallery here?
 		r = fp_async_identify_start (priv->dev, gallery, identify_cb, rdev);
 	} else {
-		fprint_device_set_action (rdev, ACTION_VERIFY);
+		priv->current_action = ACTION_VERIFY;
 
 		g_message("start verification device %d finger %d", priv->id, finger_num);
 
@@ -739,7 +822,7 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		g_error_free (error);
 	}
 
-	fprint_device_set_action (rdev, ACTION_NONE);
+	priv->current_action = ACTION_NONE;
 }
 
 static void enroll_stage_cb(struct fp_dev *dev, int result,
@@ -804,7 +887,7 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 		return;
 	}
 
-	fprint_device_set_action (rdev, ACTION_ENROLL);
+	priv->current_action = ACTION_ENROLL;
 
 	dbus_g_method_return(context);
 }
@@ -847,7 +930,7 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 		g_error_free (error);
 	}
 
-	fprint_device_set_action (rdev, ACTION_NONE);
+	priv->current_action = ACTION_NONE;
 }
 
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
@@ -859,7 +942,7 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	GSList *prints;
 	GSList *item;
 	GArray *ret;
-	char *user;
+	char *user, *sender;
 
 	user = _fprint_device_check_for_username (rdev,
 						  context,
@@ -877,6 +960,10 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 		dbus_g_method_return_error (context, error);
 		return;
 	}
+
+	sender = dbus_g_method_get_sender (context);
+	_fprint_device_add_client (rdev, sender);
+	g_free (sender);
 
 	prints = store.discover_prints(priv->ddev, user);
 	g_free (user);
@@ -904,7 +991,7 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
 	guint i;
-	char *user;
+	char *user, *sender;
 
 	user = _fprint_device_check_for_username (rdev,
 						  context,
@@ -922,6 +1009,10 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 		dbus_g_method_return_error (context, error);
 		return;
 	}
+
+	sender = dbus_g_method_get_sender (context);
+	_fprint_device_add_client (rdev, sender);
+	g_free (sender);
 
 	for (i = LEFT_THUMB; i <= RIGHT_LITTLE; i++) {
 		store.print_data_delete(priv->ddev, i, user);

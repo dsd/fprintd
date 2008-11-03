@@ -148,6 +148,7 @@ static DBusGProxy *open_device(const char *username)
 
 	if (!net_reactivated_Fprint_Device_claim(dev, username, &error))
 		g_error("failed to claim device: %s", error->message);
+
 	return dev;
 }
 

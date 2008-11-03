@@ -6,7 +6,7 @@ EXTRA_DIST = fprintd.xml
 
 libexec_PROGRAMS = fprintd
 
-fprintd_SOURCES = main.c manager.c device.c file_storage.c
+fprintd_SOURCES = main.c manager.c device.c file_storage.c egg-dbus-monitor.c egg-dbus-monitor.h
 fprintd_LDADD = $(FPRINT_LIBS) $(DAEMON_LIBS)
 fprintd_CFLAGS = $(WARN_CFLAGS) $(FPRINT_CFLAGS) $(DAEMON_CFLAGS) -DLOCALEDIR=\""$(datadir)/locale"\" -DPLUGINDIR=\""$(libdir)/fprintd/modules"\"
 

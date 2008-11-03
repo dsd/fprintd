@@ -41,7 +41,6 @@ typedef struct
 	GError *last_error;
 	GSList *dev_registry;
 	guint timeout_id;
-	volatile int num_device_used;
 } FprintManagerPrivate;
 
 #define FPRINT_MANAGER_GET_PRIVATE(o)  \
@@ -81,27 +80,32 @@ fprint_manager_timeout_cb (FprintManager *manager)
 	g_message ("No devices in use, exit");
 	//FIXME kill all the devices
 	exit(0);
+	return FALSE;
 }
 
 static void
-fprint_manager_action_notified (FprintDevice *rdev, GParamSpec *spec, FprintManager *manager)
+fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintManager *manager)
 {
 	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
-	int action;
+	guint num_devices_used = 0;
+	GSList *l;
+	gboolean in_use;
 
-	g_object_get (G_OBJECT(rdev), "action", &action, NULL);
 	if (priv->timeout_id > 0) {
 		g_source_remove (priv->timeout_id);
 		priv->timeout_id = 0;
 	}
-	if (action == 0) {
-		if (g_atomic_int_dec_and_test (&priv->num_device_used)) {
-			if (!no_timeout)
-				priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, manager);
-		}
-	} else {
-		g_atomic_int_add (&priv->num_device_used, 1);
+
+	for (l = priv->dev_registry; l != NULL; l = l->next) {
+		FprintDevice *dev = l->data;
+
+		g_object_get (G_OBJECT(dev), "in-use", &in_use, NULL);
+		if (in_use != FALSE)
+			num_devices_used++;
 	}
+
+	if (num_devices_used == 0 && !no_timeout)
+		priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, manager);
 }
 
 static void
@@ -111,8 +115,6 @@ fprint_manager_init (FprintManager *manager)
 	struct fp_dscv_dev **discovered_devs = fp_discover_devs();
 	struct fp_dscv_dev *ddev;
 	int i = 0;
-
-	priv->num_device_used = 0;
 
 	if (!discovered_devs) {
 		priv->last_error = g_error_new (FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
@@ -127,8 +129,8 @@ fprint_manager_init (FprintManager *manager)
 		FprintDevice *rdev = fprint_device_new(ddev);
 		gchar *path;
 
-		g_signal_connect (G_OBJECT(rdev), "notify::action",
-				  G_CALLBACK (fprint_manager_action_notified), manager);
+		g_signal_connect (G_OBJECT(rdev), "notify::in-use",
+				  G_CALLBACK (fprint_manager_in_use_notified), manager);
 
 		priv->dev_registry = g_slist_prepend(priv->dev_registry, rdev);
 		path = get_device_path(rdev);
