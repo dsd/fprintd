@@ -102,6 +102,7 @@ typedef struct FprintDevicePrivate FprintDevicePrivate;
 
 enum fprint_device_properties {
 	FPRINT_DEVICE_CONSTRUCT_DDEV = 1,
+	FPRINT_DEVICE_ACTION,
 };
 
 enum fprint_device_signals {
@@ -136,6 +137,33 @@ static void fprint_device_set_property(GObject *object, guint property_id,
 	}
 }
 
+static void fprint_device_get_property(GObject *object, guint property_id,
+				       GValue *value, GParamSpec *pspec)
+{
+	FprintDevice *self = (FprintDevice *) object;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
+
+	switch (property_id) {
+	case FPRINT_DEVICE_ACTION:
+		g_value_set_int(value, priv->current_action);
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+		break;
+	}
+}
+
+static void fprint_device_set_action(FprintDevice *device, FprintDeviceAction action)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(device);
+
+	if (priv->current_action == action)
+		return;
+
+	priv->current_action = action;
+	g_object_notify (G_OBJECT(device), "action");
+}
+
 static void fprint_device_class_init(FprintDeviceClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
@@ -147,6 +175,7 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 
 	gobject_class->finalize = fprint_device_finalize;
 	gobject_class->set_property = fprint_device_set_property;
+	gobject_class->get_property = fprint_device_get_property;
 	g_type_class_add_private(klass, sizeof(FprintDevicePrivate));
 
 	pspec = g_param_spec_pointer("discovered-dev", "Discovered device",
@@ -154,6 +183,11 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 		G_PARAM_CONSTRUCT_ONLY | G_PARAM_WRITABLE);
 	g_object_class_install_property(gobject_class,
 		FPRINT_DEVICE_CONSTRUCT_DDEV, pspec);
+	pspec = g_param_spec_int("action", "Current device action",
+				 "The current device action", ACTION_NONE, ACTION_ENROLL,
+				 ACTION_NONE, G_PARAM_READABLE);
+	g_object_class_install_property(gobject_class,
+					FPRINT_DEVICE_ACTION, pspec);
 
 	signals[SIGNAL_VERIFY_STATUS] = g_signal_new("verify-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
@@ -612,13 +646,13 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			g_message ("NO GALLERY");
 			return;
 		}
-		priv->current_action = ACTION_IDENTIFY;
+		fprint_device_set_action (rdev, ACTION_IDENTIFY);
 
 		g_message ("start identification device %d", priv->id);
 		//FIXME we're supposed to free the gallery here?
 		r = fp_async_identify_start (priv->dev, gallery, identify_cb, rdev);
 	} else {
-		priv->current_action = ACTION_VERIFY;
+		fprint_device_set_action (rdev, ACTION_VERIFY);
 
 		g_message("start verification device %d finger %d", priv->id, finger_num);
 
@@ -705,7 +739,7 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		g_error_free (error);
 	}
 
-	priv->current_action = ACTION_NONE;
+	fprint_device_set_action (rdev, ACTION_NONE);
 }
 
 static void enroll_stage_cb(struct fp_dev *dev, int result,
@@ -770,7 +804,7 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 		return;
 	}
 
-	priv->current_action = ACTION_ENROLL;
+	fprint_device_set_action (rdev, ACTION_ENROLL);
 
 	dbus_g_method_return(context);
 }
@@ -813,7 +847,7 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 		g_error_free (error);
 	}
 
-	priv->current_action = ACTION_NONE;
+	fprint_device_set_action (rdev, ACTION_NONE);
 }
 
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
