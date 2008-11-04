@@ -18,6 +18,9 @@ polkit_DATA = $(polkit_in_files:.policy.in=.policy)
 confdir = $(sysconfdir)/
 conf_DATA = fprintd.conf
 
+EXTRA_DIST = $(dbus_services_in_files) $(dbus_conf_DATA) $(polkit_in_files) $(conf_DATA)
+CLEANFILES = $(polkit_DATA) $(dbus_services_DATA)
+
 check:
 	$(POLKIT_POLICY_FILE_VALIDATE) $(polkit_DATA)
 
