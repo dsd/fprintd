@@ -27,12 +27,21 @@
 #include <string.h>
 
 #include <dbus/dbus-glib-bindings.h>
+#include <dbus/dbus-glib-lowlevel.h>
 
 #define PAM_SM_AUTH
 #include <security/pam_modules.h>
 
 #define MAX_TRIES 3
 #define TIMEOUT 30
+
+/* #define DEBUG */
+
+#ifdef DEBUG
+#define D(x) x
+#else
+#define D(x)
+#endif
 
 enum fp_verify_result {
 	VERIFY_NO_MATCH = 0,
@@ -138,22 +147,43 @@ static const char *fingerstr(enum fp_finger finger)
 	return names[finger];
 }
 
-static DBusGProxy *create_manager (DBusGConnection **ret_conn)
+static DBusGProxy *create_manager (DBusGConnection **ret_conn, GMainLoop **ret_loop)
 {
-	GError *error = NULL;
 	DBusGConnection *connection;
+	DBusConnection *conn;
 	DBusGProxy *manager;
+	DBusError error;
+	GMainLoop *loop;
+	GMainContext *ctx;
 
-	connection = dbus_g_bus_get(DBUS_BUS_SYSTEM, &error);
-	if (connection == NULL) {
-		g_error_free (error);
+	/* Otherwise dbus-glib doesn't setup it value types */
+	connection = dbus_g_bus_get (DBUS_BUS_SYSTEM, NULL);
+
+	if (connection != NULL)
+		dbus_g_connection_unref (connection);
+
+	/* And set us up a private D-Bus connection */
+	dbus_error_init (&error);
+	conn = dbus_bus_get_private (DBUS_BUS_SYSTEM, &error);
+	if (conn == NULL) {
+		D(g_message ("Error with getting the bus: %s", error.message));
+		dbus_error_free (&error);
 		return NULL;
 	}
 
+	/* Set up our own main loop context */
+	ctx = g_main_context_new ();
+	loop = g_main_loop_new (ctx, FALSE);
+	dbus_connection_setup_with_g_main (conn, ctx);
+
+	connection = dbus_connection_get_g_connection (conn);
+
 	manager = dbus_g_proxy_new_for_name(connection,
-					    "net.reactivated.Fprint", "/net/reactivated/Fprint/Manager",
+					    "net.reactivated.Fprint",
+					    "/net/reactivated/Fprint/Manager",
 					    "net.reactivated.Fprint.Manager");
 	*ret_conn = connection;
+	*ret_loop = loop;
 
 	return manager;
 }
@@ -168,19 +198,19 @@ static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager,
 	if (!dbus_g_proxy_call (manager, "GetDevices", &error,
 				G_TYPE_INVALID, dbus_g_type_get_collection ("GPtrArray", DBUS_TYPE_G_OBJECT_PATH),
 				&devices, G_TYPE_INVALID)) {
-		//g_print("list_devices failed: %s", error->message);
+		D(g_message("list_devices failed: %s", error->message));
 		g_error_free (error);
 		return NULL;
 	}
 	
 	if (devices->len == 0) {
-		//g_print("No devices found\n");
+		D(g_message("No devices found\n"));
 		return NULL;
 	}
 
-	//g_print("found %d devices\n", devices->len);
+	D(g_message("found %d devices\n", devices->len));
 	path = g_ptr_array_index(devices, 0);
-	//g_print("Using device %s\n", path);
+	D(g_message("Using device %s\n", path));
 
 	dev = dbus_g_proxy_new_for_name(connection,
 					"net.reactivated.Fprint",
@@ -191,7 +221,7 @@ static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager,
 	g_ptr_array_free(devices, TRUE);
 
 	if (!dbus_g_proxy_call (dev, "Claim", &error, G_TYPE_STRING, username, G_TYPE_INVALID, G_TYPE_INVALID)) {
-		//g_print("failed to claim device: %s\n", error->message);
+		D(g_message("failed to claim device: %s\n", error->message));
 		g_error_free (error);
 		g_object_unref (dev);
 		return NULL;
@@ -205,16 +235,19 @@ typedef struct {
 	gboolean verify_completed;
 	gboolean timed_out;
 	pam_handle_t *pamh;
+	GMainLoop *loop;
 } verify_data;
 
 static void verify_result(GObject *object, int result, gpointer user_data)
 {
 	verify_data *data = user_data;
 
-	//g_print("Verify result: %s (%d)\n", verify_result_str(result), result);
+	D(g_message("Verify result: %s (%d)\n", verify_result_str(result), result));
 	if (result == VERIFY_NO_MATCH || result == VERIFY_MATCH) {
 		data->verify_completed = TRUE;
 		data->result = result;
+
+		g_main_loop_quit (data->loop);
 	}
 }
 
@@ -230,6 +263,7 @@ static void verify_finger_selected(GObject *object, int finger, gpointer user_da
 	} else {
 		msg = g_strdup_printf ("Scan %s finger on %s", fingerstr(finger), driver_name);
 	}
+	D(g_message ("verify_finger_selected %s", msg));
 	send_info_msg (data->pamh, msg);
 	g_free (msg);
 }
@@ -243,10 +277,12 @@ static gboolean verify_timeout_cb (gpointer user_data)
 
 	send_info_msg (data->pamh, "Verification timed out");
 
+	g_main_loop_quit (data->loop);
+
 	return FALSE;
 }
 
-static int do_verify(pam_handle_t *pamh, DBusGProxy *dev)
+static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev)
 {
 	GError *error;
 	verify_data *data;
@@ -255,6 +291,7 @@ static int do_verify(pam_handle_t *pamh, DBusGProxy *dev)
 	data = g_new0 (verify_data, 1);
 	data->max_tries = MAX_TRIES;
 	data->pamh = pamh;
+	data->loop = loop;
 
 	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_INT, NULL);
 	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_INT, NULL);
@@ -263,40 +300,53 @@ static int do_verify(pam_handle_t *pamh, DBusGProxy *dev)
 	dbus_g_proxy_connect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected),
 				    data, NULL);
 
-
 	ret = PAM_AUTH_ERR;
 
 	while (ret == PAM_AUTH_ERR && data->max_tries > 0) {
+		GSource *source;
 		guint timeout_id;
 
-		timeout_id = g_timeout_add_seconds (TIMEOUT, verify_timeout_cb, data);
+		/* Set up the timeout on our non-default context */
+		source = g_timeout_source_new_seconds (TIMEOUT);
+		timeout_id = g_source_attach (source, g_main_loop_get_context (loop));
+		g_source_set_callback (source, verify_timeout_cb, data, NULL);
+
+		data->verify_completed = FALSE;
+		data->timed_out = FALSE;
+		data->result = 0;
 
 		if (!dbus_g_proxy_call (dev, "VerifyStart", &error, G_TYPE_UINT, -1, G_TYPE_INVALID, G_TYPE_INVALID)) {
-			//g_print("VerifyStart failed: %s", error->message);
+			D(g_message("VerifyStart failed: %s", error->message));
 			g_error_free (error);
+
+			g_source_remove (timeout_id);
+			g_source_unref (source);
 			break;
 		}
 
-		while (!data->verify_completed)
-			g_main_context_iteration(NULL, TRUE);
+		g_main_loop_run (loop);
+
+		g_source_remove (timeout_id);
+		g_source_unref (source);
 
 		/* Ignore errors from VerifyStop */
 		dbus_g_proxy_call (dev, "VerifyStop", NULL, G_TYPE_INVALID, G_TYPE_INVALID);
 
-		g_source_remove (timeout_id);
-
-		if (data->timed_out)
+		if (data->timed_out) {
 			ret = PAM_AUTHINFO_UNAVAIL;
-		else {
-			if (data->result == VERIFY_NO_MATCH)
+			break;
+		} else {
+			if (data->result == VERIFY_NO_MATCH) {
+				send_err_msg (data->pamh, "Failed to match fingerprint");
 				ret = PAM_AUTH_ERR;
-			else if (data->result == VERIFY_MATCH)
+			} else if (data->result == VERIFY_MATCH)
 				ret = PAM_SUCCESS;
 			else if (data->result < 0)
 				ret = PAM_AUTHINFO_UNAVAIL;
 			else {
 				send_info_msg (data->pamh, verify_result_str (data->result));
 				ret = PAM_AUTH_ERR;
+				break;
 			}
 		}
 		data->max_tries--;
@@ -314,7 +364,7 @@ static void release_device(DBusGProxy *dev)
 {
 	GError *error = NULL;
 	if (!dbus_g_proxy_call (dev, "Release", &error, G_TYPE_INVALID, G_TYPE_INVALID)) {
-		//g_print ("ReleaseDevice failed: %s\n", error->message);
+		D(g_message ("ReleaseDevice failed: %s\n", error->message));
 		g_error_free (error);
 	}
 }
@@ -323,12 +373,11 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 {
 	DBusGProxy *manager;
 	DBusGConnection *connection;
-	GMainLoop *loop;
 	DBusGProxy *dev;
+	GMainLoop *loop;
 	int ret;
 
-	loop = g_main_loop_new(NULL, FALSE);
-	manager = create_manager (&connection);
+	manager = create_manager (&connection, &loop);
 	if (manager == NULL)
 		return PAM_AUTHINFO_UNAVAIL;
 
@@ -336,7 +385,8 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 	g_object_unref (manager);
 	if (!dev)
 		return PAM_AUTHINFO_UNAVAIL;
-	ret = do_verify(pamh, dev);
+	ret = do_verify(connection, loop, pamh, dev);
+	g_main_loop_unref (loop);
 	release_device(dev);
 	g_object_unref (dev);
 
