@@ -301,6 +301,7 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocatio
 	PolKitCaller *pk_caller;
 	PolKitAction *pk_action;
 	PolKitResult pk_result;
+	uid_t uid;
 
 	/* Check that caller is privileged */
 	sender = dbus_g_method_get_sender (context);
@@ -316,6 +317,17 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocatio
 			     dbus_error.name, dbus_error.message);
 		dbus_error_free (&dbus_error);
 		return FALSE;
+	}
+
+	/* XXX Hack?
+	 * We'd like to allow root to set the username by default, so
+	 * it can authenticate users through PAM
+	 * https://bugzilla.redhat.com/show_bug.cgi?id=447266 */
+	if ((polkit_caller_get_uid (pk_caller, &uid) && uid == 0) &&
+	    (g_str_equal (action, "net.reactivated.fprint.device.setusername") ||
+	     g_str_equal (action, "net.reactivated.fprint.device.verify"))) {
+		polkit_caller_unref (pk_caller);
+		return TRUE;
 	}
 
 	pk_action = polkit_action_new ();
