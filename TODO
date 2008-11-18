@@ -15,6 +15,8 @@ Add Device Properties:
 
 Rethink enums and results passed, should be strings and D-Bus errors
 
+Verify PAM messages fit with GDM/gnome-screensaver
+
 Add API docs (see doc/dbus and doc subdir):
 http://gitweb.freedesktop.org/?p=DeviceKit/DeviceKit-disks.git;a=tree
 
