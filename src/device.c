@@ -55,7 +55,6 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  const char *username,
 						  DBusGMethodInvocation *context);
 static void fprint_device_get_properties (FprintDevice *rdev,
-					  GHashTable **props,
 					  DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
@@ -1037,10 +1036,8 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 	dbus_g_method_return(context);
 }
 
-static void
-fprint_device_get_properties (FprintDevice *rdev,
-			      GHashTable **props,
-			      DBusGMethodInvocation *context)
+static void fprint_device_get_properties (FprintDevice *rdev,
+					  DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GHashTable *table;
@@ -1053,6 +1050,6 @@ fprint_device_get_properties (FprintDevice *rdev,
 	driver_name = fp_driver_get_full_name (driver);
 	g_hash_table_insert (table, "Name", g_strdup (driver_name));
 
-	*props = table;
+	dbus_g_method_return (context, table);
 }
 
