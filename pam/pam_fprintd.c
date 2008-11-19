@@ -236,6 +236,8 @@ typedef struct {
 	gboolean timed_out;
 	pam_handle_t *pamh;
 	GMainLoop *loop;
+
+	char *driver;
 } verify_data;
 
 static void verify_result(GObject *object, int result, gpointer user_data)
@@ -255,13 +257,11 @@ static void verify_finger_selected(GObject *object, int finger, gpointer user_da
 {
 	verify_data *data = user_data;
 	char *msg;
-	//FIXME
-	const char *driver_name = "Fingerprint reader";
 
 	if (finger == -1) {
-		msg = g_strdup_printf ("Scan finger on %s", driver_name);
+		msg = g_strdup_printf ("Scan finger on %s", data->driver);
 	} else {
-		msg = g_strdup_printf ("Scan %s finger on %s", fingerstr(finger), driver_name);
+		msg = g_strdup_printf ("Scan %s finger on %s", fingerstr(finger), data->driver);
 	}
 	D(g_message ("verify_finger_selected %s", msg));
 	send_info_msg (data->pamh, msg);
@@ -285,6 +285,7 @@ static gboolean verify_timeout_cb (gpointer user_data)
 static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev)
 {
 	GError *error;
+	GHashTable *props;
 	verify_data *data;
 	int ret;
 
@@ -292,6 +293,14 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 	data->max_tries = MAX_TRIES;
 	data->pamh = pamh;
 	data->loop = loop;
+
+	if (dbus_g_proxy_call (dev, "GetProperties", &error, G_TYPE_INVALID,
+			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_STRING), &props, G_TYPE_INVALID)) {
+		data->driver = g_strdup (g_hash_table_lookup (props, "Name"));
+		g_hash_table_destroy (props);
+	}
+	if (!data->driver)
+		data->driver = g_strdup ("Fingerprint reader");
 
 	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_INT, NULL);
 	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_INT, NULL);
@@ -355,6 +364,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 	dbus_g_proxy_disconnect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result), data);
 	dbus_g_proxy_disconnect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected), data);
 
+	g_free (data->driver);
 	g_free (data);
 
 	return ret;

@@ -54,6 +54,10 @@
 			<arg type="i" name="result" />
 		</signal>
 
+		<method name="GetProperties">
+			<arg type="a{ss}" name="properties" direction="out" />
+		</method>
+
 	</interface>
 </node>
 

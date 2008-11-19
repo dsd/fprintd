@@ -119,6 +119,7 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 {
 	GError *error = NULL;
 	GArray *fingers;
+	GHashTable *props;
 	guint i;
 	int fingernum;
 
@@ -130,7 +131,10 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 		return;
 	}
 
-	g_print("Fingerprints for user %s:\n", username);
+	if (!net_reactivated_Fprint_Device_get_properties(dev, &props, &error))
+		g_error("GetProperties failed: %s", error->message);
+
+	g_print("Fingerprints for user %s on %s:\n", username, (char *) g_hash_table_lookup (props, "Name"));
 	for (i = 0; i < fingers->len; i++) {
 		fingernum = g_array_index(fingers, guint32, i);
 		g_print(" - #%d: %s\n", fingernum, fingerstr(fingernum));
@@ -138,6 +142,7 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 
 	fingernum = g_array_index(fingers, guint32, 0);
 	g_array_free(fingers, TRUE);
+	g_hash_table_destroy (props);
 }
 
 int main(int argc, char **argv)
