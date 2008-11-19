@@ -26,47 +26,6 @@
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
 
-enum fp_finger {
-	LEFT_THUMB = 1, /** thumb (left hand) */
-	LEFT_INDEX, /** index finger (left hand) */
-	LEFT_MIDDLE, /** middle finger (left hand) */
-	LEFT_RING, /** ring finger (left hand) */
-	LEFT_LITTLE, /** little finger (left hand) */
-	RIGHT_THUMB, /** thumb (right hand) */
-	RIGHT_INDEX, /** index finger (right hand) */
-	RIGHT_MIDDLE, /** middle finger (right hand) */
-	RIGHT_RING, /** ring finger (right hand) */
-	RIGHT_LITTLE, /** little finger (right hand) */
-};
-
-static const char *fingerstr(guint32 fingernum)
-{
-	switch (fingernum) {
-	case LEFT_THUMB:
-		return "Left thumb";
-	case LEFT_INDEX:
-		return "Left index finger";
-	case LEFT_MIDDLE:
-		return "Left middle finger";
-	case LEFT_RING:
-		return "Left ring finger";
-	case LEFT_LITTLE:
-		return "Left little finger";
-	case RIGHT_THUMB:
-		return "Right thumb";
-	case RIGHT_INDEX:
-		return "Right index finger";
-	case RIGHT_MIDDLE:
-		return "Right middle finger";
-	case RIGHT_RING:
-		return "Right ring finger";
-	case RIGHT_LITTLE:
-		return "Right little finger";
-	default:
-		return "Unknown finger";
-	}
-}
-
 static void create_manager(void)
 {
 	GError *error = NULL;
@@ -118,15 +77,14 @@ static DBusGProxy *open_device(void)
 static void list_fingerprints(DBusGProxy *dev, const char *username)
 {
 	GError *error = NULL;
-	GArray *fingers;
+	char **fingers;
 	GHashTable *props;
 	guint i;
-	int fingernum;
 
 	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, username, &fingers, &error))
 		g_error("ListEnrolledFingers failed: %s", error->message);
 
-	if (fingers->len == 0) {
+	if (fingers == NULL || g_strv_length (fingers) == 0) {
 		g_print("User %s has no fingers enrolled for this device.\n", username);
 		return;
 	}
@@ -135,14 +93,13 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 		g_error("GetProperties failed: %s", error->message);
 
 	g_print("Fingerprints for user %s on %s:\n", username, (char *) g_hash_table_lookup (props, "Name"));
-	for (i = 0; i < fingers->len; i++) {
-		fingernum = g_array_index(fingers, guint32, i);
-		g_print(" - #%d: %s\n", fingernum, fingerstr(fingernum));
+	g_hash_table_destroy (props);
+
+	for (i = 0; fingers[i] != NULL; i++) {
+		g_print(" - #%d: %s\n", i, fingers[i]);
 	}
 
-	fingernum = g_array_index(fingers, guint32, 0);
-	g_array_free(fingers, TRUE);
-	g_hash_table_destroy (props);
+	g_strfreev (fingers);
 }
 
 int main(int argc, char **argv)

@@ -33,6 +33,19 @@
 #include "storage.h"
 #include "egg-dbus-monitor.h"
 
+static char *fingers[] = {
+	"left-thumb",
+	"left-index-finger",
+	"left-middle-finger",
+	"left-ring-finger",
+	"left-little-finger",
+	"right-thumb",
+	"right-index-finger",
+	"right-middle-finger",
+	"right-ring-finger",
+	"right-little-finger"
+};
+
 extern DBusGConnection *fprintd_dbus_conn;
 
 static void fprint_device_claim(FprintDevice *rdev,
@@ -41,11 +54,11 @@ static void fprint_device_claim(FprintDevice *rdev,
 static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_verify_start(FprintDevice *rdev,
-	guint32 print_id, DBusGMethodInvocation *context);
+	const char *finger_name, DBusGMethodInvocation *context);
 static void fprint_device_verify_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_enroll_start(FprintDevice *rdev,
-	guint32 finger_num, DBusGMethodInvocation *context);
+	const char *finger_name, DBusGMethodInvocation *context);
 static void fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context);
 static void fprint_device_list_enrolled_fingers(FprintDevice *rdev, 
@@ -196,7 +209,7 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 	signals[SIGNAL_VERIFY_FINGER_SELECTED] = g_signal_new("verify-finger-selected",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
+		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_STRING);
 }
 
 static gboolean
@@ -262,6 +275,33 @@ FprintDevice *fprint_device_new(struct fp_dscv_dev *ddev)
 guint32 _fprint_device_get_id(FprintDevice *rdev)
 {
 	return DEVICE_GET_PRIVATE(rdev)->id;
+}
+
+static const char *
+finger_num_to_name (int finger_num)
+{
+	if (finger_num == -1)
+		return "any";
+	if (finger_num < LEFT_THUMB || finger_num > RIGHT_LITTLE)
+		return NULL;
+	return fingers[finger_num - 1];
+}
+
+static int
+finger_name_to_num (const char *finger_name)
+{
+	guint i;
+
+	if (finger_name == NULL || *finger_name == '\0' || g_str_equal (finger_name, "any"))
+		return -1;
+
+	for (i = 0; i < G_N_ELEMENTS (fingers); i++) {
+		if (g_str_equal (finger_name, fingers[i]))
+			return i + 1;
+	}
+
+	/* Invalid, let's try that */
+	return -1;
 }
 
 static gboolean
@@ -665,12 +705,13 @@ static void identify_cb(struct fp_dev *dev, int r,
 }
 
 static void fprint_device_verify_start(FprintDevice *rdev,
-	guint32 finger_num, DBusGMethodInvocation *context)
+	const char *finger_name, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct fp_print_data **gallery = NULL;
 	struct fp_print_data *data = NULL;
 	GError *error = NULL;
+	guint finger_num = finger_name_to_num (finger_name);
 	int r;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
@@ -769,7 +810,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 
 	/* Emit VerifyFingerSelected telling the front-end which finger
 	 * we selected for auth */
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED], 0, finger_num);
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED],
+		      0, finger_num_to_name (finger_num));
 
 
 	if (r < 0) {
@@ -860,12 +902,21 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 }
 
 static void fprint_device_enroll_start(FprintDevice *rdev,
-	guint32 finger_num, DBusGMethodInvocation *context)
+	const char *finger_name, DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
+	int finger_num = finger_name_to_num (finger_name);
 	GError *error = NULL;
 	int r;
+
+	if (finger_num == -1) {
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
+			    "Invalid print name");
+		dbus_g_method_return_error(context, error);
+		g_error_free (error);
+		return;
+	}
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
 		dbus_g_method_return_error (context, error);
@@ -955,7 +1006,7 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	GError *error = NULL;
 	GSList *prints;
 	GSList *item;
-	GArray *ret;
+	GPtrArray *ret;
 	char *user, *sender;
 
 	user = _fprint_device_check_for_username (rdev,
@@ -988,14 +1039,16 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 		return;
 	}
 
-	ret = g_array_new(FALSE, FALSE, sizeof(int));
+	ret = g_ptr_array_new ();
 	for (item = prints; item; item = item->next) {
-		ret = g_array_append_val(ret, item->data);
+		int finger_num = GPOINTER_TO_INT (item->data);
+		g_ptr_array_add (ret, g_strdup (finger_num_to_name (finger_num)));
 	}
+	g_ptr_array_add (ret, NULL);
 
 	g_slist_free(prints);
 
-	dbus_g_method_return(context, ret);
+	dbus_g_method_return(context, g_ptr_array_free (ret, FALSE));
 }
 
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,

@@ -57,19 +57,6 @@ static const char *enroll_result_str(int result)
 	}
 }
 
-enum fp_finger {
-	LEFT_THUMB = 1, /** thumb (left hand) */
-	LEFT_INDEX, /** index finger (left hand) */
-	LEFT_MIDDLE, /** middle finger (left hand) */
-	LEFT_RING, /** ring finger (left hand) */
-	LEFT_LITTLE, /** little finger (left hand) */
-	RIGHT_THUMB, /** thumb (right hand) */
-	RIGHT_INDEX, /** index finger (right hand) */
-	RIGHT_MIDDLE, /** middle finger (right hand) */
-	RIGHT_RING, /** ring finger (right hand) */
-	RIGHT_LITTLE, /** little finger (right hand) */
-};
-
 static void create_manager(void)
 {
 	GError *error = NULL;
@@ -138,7 +125,7 @@ static void do_enroll(DBusGProxy *dev)
 		&enroll_completed, NULL);
 
 	g_print("Enrolling right index finger.\n");
-	if (!net_reactivated_Fprint_Device_enroll_start(dev, RIGHT_INDEX, &error))
+	if (!net_reactivated_Fprint_Device_enroll_start(dev, "right-index-finger", &error))
 		g_error("EnrollStart failed: %s", error->message);
 
 	while (!enroll_completed)

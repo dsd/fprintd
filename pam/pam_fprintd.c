@@ -72,19 +72,6 @@ static const char *verify_result_str(int result)
 	}
 }
 
-enum fp_finger {
-	LEFT_THUMB = 1, /** thumb (left hand) */
-	LEFT_INDEX, /** index finger (left hand) */
-	LEFT_MIDDLE, /** middle finger (left hand) */
-	LEFT_RING, /** ring finger (left hand) */
-	LEFT_LITTLE, /** little finger (left hand) */
-	RIGHT_THUMB, /** thumb (right hand) */
-	RIGHT_INDEX, /** index finger (right hand) */
-	RIGHT_MIDDLE, /** middle finger (right hand) */
-	RIGHT_RING, /** ring finger (right hand) */
-	RIGHT_LITTLE, /** little finger (right hand) */
-};
-
 static gboolean send_info_msg(pam_handle_t *pamh, const char *msg)
 {
 	const struct pam_message mymsg = {
@@ -127,24 +114,33 @@ static gboolean send_err_msg(pam_handle_t *pamh, const char *msg)
 	return (pc->conv(1, &msgp, &resp, pc->appdata_ptr) == PAM_SUCCESS);
 }
 
+struct {
+	const char *dbus_name;
+	const char *finger_name;
+} fingers[11] = {
+	{ "left-thumb", "Left thumb" },
+	{ "left-index-finger", "Left index finger" },
+	{ "left-middle-finger", "Left middle finger" },
+	{ "left-ring-finger", "Left ring finger" },
+	{ "left-little-finger", "Left little finger" },
+	{ "right-thumb", "Right thumb" },
+	{ "right-index-finger", "Right index finger" },
+	{ "right-middle-finger", "Right middle finger" },
+	{ "right-ring-finger", "Right ring finger" },
+	{ "right-little-finger" "Right little finger" },
+	{ NULL, NULL }
+};
 
-static const char *fingerstr(enum fp_finger finger)
+static const char *fingerstr(const char *finger_name)
 {
-	const char *names[] = {
-		[LEFT_THUMB] = "left thumb",
-		[LEFT_INDEX] = "left index",
-		[LEFT_MIDDLE] = "left middle",
-		[LEFT_RING] = "left ring",
-		[LEFT_LITTLE] = "left little",
-		[RIGHT_THUMB] = "right thumb",
-		[RIGHT_INDEX] = "right index",
-		[RIGHT_MIDDLE] = "right middle",
-		[RIGHT_RING] = "right ring",
-		[RIGHT_LITTLE] = "right little",
-	};
-	if (finger < LEFT_THUMB || finger > RIGHT_LITTLE)
-		return "UNKNOWN";
-	return names[finger];
+	guint i;
+
+	for (i = 0; fingers[i].dbus_name != NULL; i++) {
+		if (g_str_equal (fingers[i].dbus_name, finger_name))
+			return fingers[i].finger_name;
+	}
+
+	return NULL;
 }
 
 static DBusGProxy *create_manager (DBusGConnection **ret_conn, GMainLoop **ret_loop)
@@ -253,15 +249,15 @@ static void verify_result(GObject *object, int result, gpointer user_data)
 	}
 }
 
-static void verify_finger_selected(GObject *object, int finger, gpointer user_data)
+static void verify_finger_selected(GObject *object, const char *finger_name, gpointer user_data)
 {
 	verify_data *data = user_data;
 	char *msg;
 
-	if (finger == -1) {
+	if (g_str_equal (finger_name, "any")) {
 		msg = g_strdup_printf ("Scan finger on %s", data->driver);
 	} else {
-		msg = g_strdup_printf ("Scan %s finger on %s", fingerstr(finger), data->driver);
+		msg = g_strdup_printf ("Scan %s finger on %s", fingerstr(finger_name), data->driver);
 	}
 	D(g_message ("verify_finger_selected %s", msg));
 	send_info_msg (data->pamh, msg);

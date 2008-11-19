@@ -19,13 +19,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dbus/dbus-glib-bindings.h>
 #include "manager-dbus-glue.h"
 #include "device-dbus-glue.h"
 
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
-static int finger_num = -1;
+static char *finger_name = "any";
 static gboolean g_fatal_warnings = FALSE;
 static char **usernames = NULL;
 
@@ -55,49 +56,6 @@ static const char *verify_result_str(int result)
 		return "Please remove finger and retry";
 	default:
 		return "Unknown";
-	}
-}
-
-enum fp_finger {
-	LEFT_THUMB = 1, /** thumb (left hand) */
-	LEFT_INDEX, /** index finger (left hand) */
-	LEFT_MIDDLE, /** middle finger (left hand) */
-	LEFT_RING, /** ring finger (left hand) */
-	LEFT_LITTLE, /** little finger (left hand) */
-	RIGHT_THUMB, /** thumb (right hand) */
-	RIGHT_INDEX, /** index finger (right hand) */
-	RIGHT_MIDDLE, /** middle finger (right hand) */
-	RIGHT_RING, /** ring finger (right hand) */
-	RIGHT_LITTLE, /** little finger (right hand) */
-};
-
-static const char *fingerstr(guint32 fingernum)
-{
-	switch (fingernum) {
-	case LEFT_THUMB:
-		return "Left thumb";
-	case LEFT_INDEX:
-		return "Left index finger";
-	case LEFT_MIDDLE:
-		return "Left middle finger";
-	case LEFT_RING:
-		return "Left ring finger";
-	case LEFT_LITTLE:
-		return "Left little finger";
-	case RIGHT_THUMB:
-		return "Right thumb";
-	case RIGHT_INDEX:
-		return "Right index finger";
-	case RIGHT_MIDDLE:
-		return "Right middle finger";
-	case RIGHT_RING:
-		return "Right ring finger";
-	case RIGHT_LITTLE:
-		return "Right little finger";
-	case -1:
-		return "First fingerprint available";
-	default:
-		return "Unknown finger";
 	}
 }
 
@@ -155,26 +113,26 @@ static DBusGProxy *open_device(const char *username)
 static void find_finger(DBusGProxy *dev, const char *username)
 {
 	GError *error = NULL;
-	GArray *fingers;
+	char **fingers;
 	guint i;
-	int fingernum;
 
 	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, username, &fingers, &error))
 		g_error("ListEnrolledFingers failed: %s", error->message);
 
-	if (fingers->len == 0) {
+	if (fingers == NULL || g_strv_length (fingers) == 0) {
 		g_print("No fingers enrolled for this device.\n");
 		exit(1);
 	}
 
 	g_print("Listing enrolled fingers:\n");
-	for (i = 0; i < fingers->len; i++) {
-		fingernum = g_array_index(fingers, guint32, i);
-		g_print(" - #%d: %s\n", fingernum, fingerstr(fingernum));
+	for (i = 0; fingers[i] != NULL; i++) {
+		g_print(" - #%d: %s\n", i, fingers[i]);
 	}
 
-	fingernum = g_array_index(fingers, guint32, 0);
-	g_array_free(fingers, TRUE);
+	if (strcmp (finger_name, "any") == 0)
+		finger_name = fingers[0];
+
+	g_strfreev (fingers);
 }
 
 static void verify_result(GObject *object, int result, void *user_data)
@@ -185,9 +143,9 @@ static void verify_result(GObject *object, int result, void *user_data)
 		*verify_completed = TRUE;
 }
 
-static void verify_finger_selected(GObject *object, int finger, void *user_data)
+static void verify_finger_selected(GObject *object, const char *name, void *user_data)
 {
-	g_print("Verifying: %s\n", fingerstr(finger));
+	g_print("Verifying: %s\n", name);
 }
 
 static void do_verify(DBusGProxy *dev)
@@ -202,7 +160,7 @@ static void do_verify(DBusGProxy *dev)
 	dbus_g_proxy_connect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected),
 		NULL, NULL);
 
-	if (!net_reactivated_Fprint_Device_verify_start(dev, finger_num, &error))
+	if (!net_reactivated_Fprint_Device_verify_start(dev, finger_name, &error))
 		g_error("VerifyStart failed: %s", error->message);
 
 	while (!verify_completed)
@@ -223,7 +181,7 @@ static void release_device(DBusGProxy *dev)
 }
 
 static const GOptionEntry entries[] = {
-	{ "finger", 'f',  0, G_OPTION_ARG_INT, &finger_num, "Finger selected to verify (default is automatic)", NULL },
+	{ "finger", 'f',  0, G_OPTION_ARG_STRING, &finger_name, "Finger selected to verify (default is automatic)", NULL },
 	{"g-fatal-warnings", 0, 0, G_OPTION_ARG_NONE, &g_fatal_warnings, "Make all warnings fatal", NULL},
  	{ G_OPTION_REMAINING, '\0', 0, G_OPTION_ARG_STRING_ARRAY, &usernames, NULL, "[username]" },
 	{ NULL }

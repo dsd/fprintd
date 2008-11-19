@@ -6,7 +6,7 @@
 
 		<method name="ListEnrolledFingers">
 			<arg type="s" name="username" direction="in" />
-			<arg type="au" name="enrolled_fingers" direction="out" />
+			<arg type="as" name="enrolled_fingers" direction="out" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
@@ -25,7 +25,7 @@
 		</method>
 
 		<method name="VerifyStart">
-			<arg type="u" name="print_id" direction="in" />
+			<arg type="s" name="finger_name" direction="in" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
@@ -34,7 +34,7 @@
 		</method>
 
 		<signal name="VerifyFingerSelected">
-			<arg type="i" name="finger_num" />
+			<arg type="s" name="finger_name" />
 		</signal>
 
 		<signal name="VerifyStatus">
@@ -42,7 +42,7 @@
 		</signal>
 
 		<method name="EnrollStart">
-			<arg type="u" name="finger_num" direction="in" />
+			<arg type="s" name="finger_name" direction="in" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
