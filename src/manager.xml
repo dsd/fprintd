@@ -8,6 +8,10 @@
 			<arg type="ao" name="devices" direction="out" />
 		</method>
 
+		<method name="GetDefaultDevice">
+			<arg type="o" name="device" direction="out" />
+		</method>
+
 	</interface>
 </node>
 

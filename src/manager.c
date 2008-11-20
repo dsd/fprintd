@@ -29,7 +29,8 @@
 
 static gboolean fprint_manager_get_devices(FprintManager *manager,
 	GPtrArray **devices, GError **error);
-
+static gboolean fprint_manager_get_default_device(FprintManager *manager,
+	const char **device, GError **error);
 #include "manager-dbus-glue.h"
 
 static GObjectClass *parent_class = NULL;
@@ -176,3 +177,18 @@ static gboolean fprint_manager_get_devices(FprintManager *manager,
 	return TRUE;
 }
 
+static gboolean fprint_manager_get_default_device(FprintManager *manager,
+	const char **device, GError **error)
+{
+	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	GSList *elem = priv->dev_registry;
+	int num_open = g_slist_length(elem);
+
+	if (num_open > 0) {
+		*device = get_device_path (elem->data);
+		return TRUE;
+	} else {
+		*device = NULL;
+		return FALSE;
+	}
+}
