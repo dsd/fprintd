@@ -57,7 +57,10 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 	if (!net_reactivated_Fprint_Device_get_properties(dev, &props, &error))
 		g_error("GetProperties failed: %s", error->message);
 
-	g_print("Fingerprints for user %s on %s:\n", username, (char *) g_hash_table_lookup (props, "Name"));
+	g_print("Fingerprints for user %s on %s (%s):\n",
+		username,
+		g_value_get_string (g_hash_table_lookup (props, "Name")),
+		g_value_get_string (g_hash_table_lookup (props, "ScanType")));
 	g_hash_table_destroy (props);
 
 	for (i = 0; fingers[i] != NULL; i++) {

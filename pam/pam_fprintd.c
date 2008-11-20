@@ -302,7 +302,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 
 	if (dbus_g_proxy_call (dev, "GetProperties", &error, G_TYPE_INVALID,
 			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_STRING), &props, G_TYPE_INVALID)) {
-		data->driver = g_strdup (g_hash_table_lookup (props, "Name"));
+		data->driver = g_value_dup_string (g_hash_table_lookup (props, "Name"));
 		g_hash_table_destroy (props);
 	}
 	if (!data->driver)

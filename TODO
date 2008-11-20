@@ -26,7 +26,5 @@ Review error cases, and possible errors
 
 Do we swipe or scan, devices would know
 
-Export fp_dev_get_nr_enroll_stages and swipe type through properties
-
 Add a "done" argument to verify and enroll result signals, make it easier
 to know when we're done.

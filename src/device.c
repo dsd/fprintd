@@ -1140,15 +1140,30 @@ static void fprint_device_get_properties (FprintDevice *rdev,
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GHashTable *table;
-	struct fp_driver *driver;
-	const char *driver_name;
+	GValue *value;
 
 	table = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
 
-	driver = fp_dscv_dev_get_driver (priv->ddev);
-	driver_name = fp_driver_get_full_name (driver);
-	g_hash_table_insert (table, "Name", g_strdup (driver_name));
+	value = g_new0 (GValue, 1);
+	g_value_init (value, G_TYPE_STRING);
+	g_value_set_string (value, fp_driver_get_full_name (fp_dscv_dev_get_driver (priv->ddev)));
+	g_hash_table_insert (table, "Name", value);
+
+	value = g_new0 (GValue, 1);
+	g_value_init (value, G_TYPE_STRING);
+	g_value_set_static_string (value,
+				   fp_driver_get_scan_type (fp_dscv_dev_get_driver (priv->ddev)) == FP_SCAN_TYPE_PRESS ? "press" : "swipe");
+	g_hash_table_insert (table, "ScanType", value);
+
+	if (priv->dev != NULL) {
+		value = g_new0 (GValue, 1);
+		g_value_init (value, G_TYPE_INT);
+		g_value_set_int (value, fp_dev_get_nr_enroll_stages (priv->dev));
+		g_hash_table_insert (table, "NumberEnrollStages", value);
+	}
 
 	dbus_g_method_return (context, table);
+
+	g_hash_table_destroy (table);
 }
 

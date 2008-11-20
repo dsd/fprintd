@@ -55,7 +55,7 @@
 		</signal>
 
 		<method name="GetProperties">
-			<arg type="a{ss}" name="properties" direction="out" />
+			<arg type="a{sv}" name="properties" direction="out" />
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
 		</method>
 
