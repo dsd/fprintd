@@ -143,6 +143,19 @@ static const char *fingerstr(const char *finger_name)
 	return NULL;
 }
 
+static const char *resulstr(const char *result)
+{
+	if (g_str_equal (result, "verify-retry-scan"))
+		return "Try scanning your finger again";
+	if (g_str_equal (result, "verify-swipe-too-short"))
+		return "Swipe was too short, try scanning your finger again";
+	if (g_str_equal (result, "verify-finger-not-centered"))
+		return "Your finger was not centered, try scanning your finger again";
+	if (g_str_equal (result, "verify-remove-and-retry"))
+		return "Remove your finger, and try scanning your finger again";
+	g_assert_not_reached ();
+}
+
 static DBusGProxy *create_manager (DBusGConnection **ret_conn, GMainLoop **ret_loop)
 {
 	DBusGConnection *connection;
@@ -223,8 +236,7 @@ static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager,
 
 typedef struct {
 	guint max_tries;
-	int result;
-	gboolean verify_completed;
+	char *result;
 	gboolean timed_out;
 	pam_handle_t *pamh;
 	GMainLoop *loop;
@@ -232,17 +244,22 @@ typedef struct {
 	char *driver;
 } verify_data;
 
-static void verify_result(GObject *object, int result, gpointer user_data)
+static void verify_result(GObject *object, const char *result, gpointer user_data)
 {
 	verify_data *data = user_data;
+	const char *msg;
 
-	D(g_message("Verify result: %s (%d)\n", verify_result_str(result), result));
-	if (result == VERIFY_NO_MATCH || result == VERIFY_MATCH) {
-		data->verify_completed = TRUE;
-		data->result = result;
-
+	D(g_message("Verify result: %s\n", result));
+	if (g_str_equal (result, "verify-no-match") ||
+	    g_str_equal (result, "verify-match") ||
+	    g_str_equal (result, "verify-unknown-error")) {
+		data->result = g_strdup (result);
 		g_main_loop_quit (data->loop);
+		return;
 	}
+
+	msg = resulstr (result);
+	send_err_msg (data->pamh, msg);
 }
 
 static void verify_finger_selected(GObject *object, const char *finger_name, gpointer user_data)
@@ -265,10 +282,7 @@ static gboolean verify_timeout_cb (gpointer user_data)
 	verify_data *data = user_data;
 
 	data->timed_out = TRUE;
-	data->verify_completed = TRUE;
-
 	send_info_msg (data->pamh, "Verification timed out");
-
 	g_main_loop_quit (data->loop);
 
 	return FALSE;
@@ -312,9 +326,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 		timeout_id = g_source_attach (source, g_main_loop_get_context (loop));
 		g_source_set_callback (source, verify_timeout_cb, data, NULL);
 
-		data->verify_completed = FALSE;
 		data->timed_out = FALSE;
-		data->result = 0;
 
 		if (!dbus_g_proxy_call (dev, "VerifyStart", &error, G_TYPE_UINT, -1, G_TYPE_INVALID, G_TYPE_INVALID)) {
 			D(g_message("VerifyStart failed: %s", error->message));
@@ -337,18 +349,21 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 			ret = PAM_AUTHINFO_UNAVAIL;
 			break;
 		} else {
-			if (data->result == VERIFY_NO_MATCH) {
+			if (g_str_equal (data->result, "verify-no-match")) {
 				send_err_msg (data->pamh, "Failed to match fingerprint");
 				ret = PAM_AUTH_ERR;
-			} else if (data->result == VERIFY_MATCH)
+			} else if (g_str_equal (data->result, "verify-match"))
 				ret = PAM_SUCCESS;
-			else if (data->result < 0)
+			else if (g_str_equal (data->result, "verify-unknown-error"))
 				ret = PAM_AUTHINFO_UNAVAIL;
 			else {
-				send_info_msg (data->pamh, verify_result_str (data->result));
+				send_info_msg (data->pamh, "An unknown error occured");
 				ret = PAM_AUTH_ERR;
+				g_free (data->result);
 				break;
 			}
+			g_free (data->result);
+			data->result = NULL;
 		}
 		data->max_tries--;
 	}

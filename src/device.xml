@@ -38,7 +38,7 @@
 		</signal>
 
 		<signal name="VerifyStatus">
-			<arg type="i" name="result" />
+			<arg type="s" name="result" />
 		</signal>
 
 		<method name="EnrollStart">
@@ -51,7 +51,7 @@
 		</method>
 
 		<signal name="EnrollStatus">
-			<arg type="i" name="result" />
+			<arg type="s" name="result" />
 		</signal>
 
 		<method name="GetProperties">

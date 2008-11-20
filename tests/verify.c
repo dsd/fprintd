@@ -30,35 +30,6 @@ static char *finger_name = "any";
 static gboolean g_fatal_warnings = FALSE;
 static char **usernames = NULL;
 
-enum fp_verify_result {
-	VERIFY_NO_MATCH = 0,
-	VERIFY_MATCH = 1,
-	VERIFY_RETRY = 100,
-	VERIFY_RETRY_TOO_SHORT = 101,
-	VERIFY_RETRY_CENTER_FINGER = 102,
-	VERIFY_RETRY_REMOVE_FINGER = 103,
-};
-
-static const char *verify_result_str(int result)
-{
-	switch (result) {
-	case VERIFY_NO_MATCH:
-		return "No match";
-	case VERIFY_MATCH:
-		return "Match!";
-	case VERIFY_RETRY:
-		return "Retry scan";
-	case VERIFY_RETRY_TOO_SHORT:
-		return "Swipe too short, please retry";
-	case VERIFY_RETRY_CENTER_FINGER:
-		return "Finger not centered, please retry";
-	case VERIFY_RETRY_REMOVE_FINGER:
-		return "Please remove finger and retry";
-	default:
-		return "Unknown";
-	}
-}
-
 static void create_manager(void)
 {
 	GError *error = NULL;
@@ -125,11 +96,13 @@ static void find_finger(DBusGProxy *dev, const char *username)
 	g_strfreev (fingers);
 }
 
-static void verify_result(GObject *object, int result, void *user_data)
+static void verify_result(GObject *object, const char *result, void *user_data)
 {
 	gboolean *verify_completed = user_data;
-	g_print("Verify result: %s (%d)\n", verify_result_str(result), result);
-	if (result == VERIFY_NO_MATCH || result == VERIFY_MATCH)
+	g_print("Verify result: %s\n", result);
+	if (g_str_equal (result, "verify-no-match") ||
+	    g_str_equal (result, "verify-match") ||
+	    g_str_equal (result, "verify-unknown-error"))
 		*verify_completed = TRUE;
 }
 

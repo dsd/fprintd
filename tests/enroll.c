@@ -25,38 +25,6 @@
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
 
-enum enroll_result {
-	ENROLL_COMPLETE = 1,
-	ENROLL_FAIL,
-	ENROLL_PASS,
-	ENROLL_RETRY = 100,
-	ENROLL_RETRY_TOO_SHORT = 101,
-	ENROLL_RETRY_CENTER_FINGER = 102,
-	ENROLL_RETRY_REMOVE_FINGER = 103,
-};
-
-static const char *enroll_result_str(int result)
-{
-	switch (result) {
-	case ENROLL_COMPLETE:
-		return "Enroll completed.";
-	case ENROLL_FAIL:
-		return "Enroll failed :(";
-	case ENROLL_PASS:
-		return "Enroll stage passed. Please scan again for next stage.";
-	case ENROLL_RETRY:
-		return "Retry scan";
-	case ENROLL_RETRY_TOO_SHORT:
-		return "Swipe too short, please retry";
-	case ENROLL_RETRY_CENTER_FINGER:
-		return "Finger not centered, please retry";
-	case ENROLL_RETRY_REMOVE_FINGER:
-		return "Please remove finger and retry";
-	default:
-		return "Unknown";
-	}
-}
-
 static void create_manager(void)
 {
 	GError *error = NULL;
@@ -97,11 +65,13 @@ static DBusGProxy *open_device(const char *username)
 	return dev;
 }
 
-static void enroll_result(GObject *object, int result, void *user_data)
+static void enroll_result(GObject *object, const char *result, void *user_data)
 {
 	gboolean *enroll_completed = user_data;
-	g_print("Enroll result: %s (%d)\n", enroll_result_str(result), result);
-	if (result == ENROLL_COMPLETE || result == ENROLL_FAIL)
+	g_print("Enroll result: %s\n", result);
+	if (g_str_equal(result, "enroll-completed") ||
+	    g_str_equal(result, "enroll-failed") ||
+	    g_str_equal(result, "enroll-unknown-error"))
 		*enroll_completed = TRUE;
 }
 

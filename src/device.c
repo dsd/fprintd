@@ -203,13 +203,13 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 
 	signals[SIGNAL_VERIFY_STATUS] = g_signal_new("verify-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
+		g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
 	signals[SIGNAL_ENROLL_STATUS] = g_signal_new("enroll-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
+		g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
 	signals[SIGNAL_VERIFY_FINGER_SELECTED] = g_signal_new("verify-finger-selected",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_STRING);
+		g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
 }
 
 static gboolean
@@ -302,6 +302,50 @@ finger_name_to_num (const char *finger_name)
 
 	/* Invalid, let's try that */
 	return -1;
+}
+
+static const char *
+verify_result_to_name (int result)
+{
+	switch (result) {
+	case FP_VERIFY_NO_MATCH:
+		return "verify-no-match";
+	case FP_VERIFY_MATCH:
+		return "verify-match";
+	case FP_VERIFY_RETRY:
+		return "verify-retry-scan";
+	case FP_VERIFY_RETRY_TOO_SHORT:
+		return "verify-swipe-too-short";
+	case FP_VERIFY_RETRY_CENTER_FINGER:
+		return "verify-finger-not-centered";
+	case FP_VERIFY_RETRY_REMOVE_FINGER:
+		return "verify-remove-and-retry";
+	default:
+		return "verify-unknown-error";
+	}
+}
+
+static const char *
+enroll_result_to_name (int result)
+{
+	switch (result) {
+	case FP_ENROLL_COMPLETE:
+		return "enroll-completed";
+	case FP_ENROLL_FAIL:
+		return "enroll-failed";
+	case FP_ENROLL_PASS:
+		return "enroll-stage-passed";
+	case FP_ENROLL_RETRY:
+		return "enroll-retry-scan";
+	case FP_ENROLL_RETRY_TOO_SHORT:
+		return "enroll-swipe-too-short";
+	case FP_ENROLL_RETRY_CENTER_FINGER:
+		return "enroll-finger-not-centered";
+	case FP_ENROLL_RETRY_REMOVE_FINGER:
+		return "enroll-remove-and-retry";
+	default:
+		return "enroll-unknown-error";
+	}
 }
 
 static gboolean
@@ -688,9 +732,10 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 		      void *user_data)
 {
 	struct FprintDevice *rdev = user_data;
-	g_message("verify_cb: result %d", r);
+	const char *name = verify_result_to_name (r);
+	g_message("verify_cb: result %s (%d)", name, r);
 
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, r);
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name);
 	fp_img_free(img);
 }
 
@@ -698,9 +743,10 @@ static void identify_cb(struct fp_dev *dev, int r,
 			 size_t match_offset, struct fp_img *img, void *user_data)
 {
 	struct FprintDevice *rdev = user_data;
-	g_message("identify_cb: result %d", r);
+	const char *name = verify_result_to_name (r);
+	g_message("identify_cb: result %s (%d)", name, r);
 
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, r);
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name);
 	fp_img_free(img);
 }
 
@@ -896,7 +942,7 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 			result = FP_ENROLL_FAIL;
 	}
 
-	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, result);
+	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, enroll_result_to_name (result));
 	fp_img_free(img);
 	fp_print_data_free(print);
 }

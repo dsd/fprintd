@@ -5,8 +5,6 @@ Enforce command sequences:
  force VerifyStop after non-retry verify result comes in
  etc
 
-Rethink enums and results passed, should be strings and D-Bus errors
-
 Verify PAM messages fit with GDM/gnome-screensaver
 
 Add API docs (see doc/dbus and doc subdir):
