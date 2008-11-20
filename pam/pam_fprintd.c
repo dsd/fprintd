@@ -143,16 +143,19 @@ static const char *fingerstr(const char *finger_name)
 	return NULL;
 }
 
-static const char *resulstr(const char *result)
+static const char *resulstr(const char *result, gboolean is_swipe)
 {
 	if (g_str_equal (result, "verify-retry-scan"))
-		return "Try scanning your finger again";
+		if (is_swipe == FALSE)
+			return "Place your finger on the reader again";
+		else
+			return "Swipe your finger again";
 	if (g_str_equal (result, "verify-swipe-too-short"))
-		return "Swipe was too short, try scanning your finger again";
+		return "Swipe was too short, try again";
 	if (g_str_equal (result, "verify-finger-not-centered"))
-		return "Your finger was not centered, try scanning your finger again";
+		return "Your finger was not centered, try swiping your finger again";
 	if (g_str_equal (result, "verify-remove-and-retry"))
-		return "Remove your finger, and try scanning your finger again";
+		return "Remove your finger, and try swiping your finger again";
 	g_assert_not_reached ();
 }
 
@@ -238,6 +241,7 @@ typedef struct {
 	guint max_tries;
 	char *result;
 	gboolean timed_out;
+	gboolean is_swipe;
 	pam_handle_t *pamh;
 	GMainLoop *loop;
 
@@ -258,7 +262,7 @@ static void verify_result(GObject *object, const char *result, gpointer user_dat
 		return;
 	}
 
-	msg = resulstr (result);
+	msg = resulstr (result, data->is_swipe);
 	send_err_msg (data->pamh, msg);
 }
 
@@ -268,9 +272,15 @@ static void verify_finger_selected(GObject *object, const char *finger_name, gpo
 	char *msg;
 
 	if (g_str_equal (finger_name, "any")) {
-		msg = g_strdup_printf ("Scan finger on %s", data->driver);
+		if (data->is_swipe == FALSE)
+			msg = g_strdup_printf ("Place your finger on %s", data->driver);
+		else
+			msg = g_strdup_printf ("Swipe your finger on %s", data->driver);
 	} else {
-		msg = g_strdup_printf ("Scan %s finger on %s", fingerstr(finger_name), data->driver);
+		if (data->is_swipe == FALSE)
+			msg = g_strdup_printf ("Place %s finger on %s", fingerstr(finger_name), data->driver);
+		else
+			msg = g_strdup_printf ("Swipe %s finger on %s", fingerstr(finger_name), data->driver);
 	}
 	D(g_message ("verify_finger_selected %s", msg));
 	send_info_msg (data->pamh, msg);
@@ -302,7 +312,11 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 
 	if (dbus_g_proxy_call (dev, "GetProperties", &error, G_TYPE_INVALID,
 			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_STRING), &props, G_TYPE_INVALID)) {
+		const char *scan_type;
 		data->driver = g_value_dup_string (g_hash_table_lookup (props, "Name"));
+		scan_type = g_value_dup_string (g_hash_table_lookup (props, "ScanType"));
+		if (g_str_equal (scan_type, "swipe"))
+			data->is_swipe = TRUE;
 		g_hash_table_destroy (props);
 	}
 	if (!data->driver)
