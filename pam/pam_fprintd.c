@@ -187,25 +187,22 @@ static DBusGProxy *create_manager (DBusGConnection **ret_conn, GMainLoop **ret_l
 static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager, const char *username)
 {
 	GError *error = NULL;
-	GPtrArray *devices;
 	gchar *path;
 	DBusGProxy *dev;
 
-	if (!dbus_g_proxy_call (manager, "GetDevices", &error,
-				G_TYPE_INVALID, dbus_g_type_get_collection ("GPtrArray", DBUS_TYPE_G_OBJECT_PATH),
-				&devices, G_TYPE_INVALID)) {
-		D(g_message("list_devices failed: %s", error->message));
+	if (!dbus_g_proxy_call (manager, "GetDefaultDevice", &error,
+				G_TYPE_INVALID, DBUS_TYPE_G_OBJECT_PATH,
+				&path, G_TYPE_INVALID)) {
+		D(g_message("get_default_devices failed: %s", error->message));
 		g_error_free (error);
 		return NULL;
 	}
 	
-	if (devices->len == 0) {
+	if (path == NULL) {
 		D(g_message("No devices found\n"));
 		return NULL;
 	}
 
-	D(g_message("found %d devices\n", devices->len));
-	path = g_ptr_array_index(devices, 0);
 	D(g_message("Using device %s\n", path));
 
 	dev = dbus_g_proxy_new_for_name(connection,
@@ -213,8 +210,7 @@ static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager,
 					path,
 					"net.reactivated.Fprint.Device");
 	
-	g_ptr_array_foreach(devices, (GFunc) g_free, NULL);
-	g_ptr_array_free(devices, TRUE);
+	g_free (path);
 
 	if (!dbus_g_proxy_call (dev, "Claim", &error, G_TYPE_STRING, username, G_TYPE_INVALID, G_TYPE_INVALID)) {
 		D(g_message("failed to claim device: %s\n", error->message));

@@ -73,34 +73,24 @@ static void create_manager(void)
 static DBusGProxy *open_device(const char *username)
 {
 	GError *error = NULL;
-	GPtrArray *devices;
 	gchar *path;
 	DBusGProxy *dev;
-	guint i;
 
-	if (!net_reactivated_Fprint_Manager_get_devices(manager, &devices, &error))
+	if (!net_reactivated_Fprint_Manager_get_default_device(manager, &path, &error))
 		g_error("list_devices failed: %s", error->message);
 	
-	if (devices->len == 0) {
+	if (path == NULL) {
 		g_print("No devices found\n");
 		exit(1);
 	}
 
-	g_print("found %d devices\n", devices->len);
-	for (i = 0; i < devices->len; i++) {
-		path = g_ptr_array_index(devices, i);
-		g_print("Device at %s\n", path);
-	}
-
-	path = g_ptr_array_index(devices, 0);
 	g_print("Using device %s\n", path);
 
 	/* FIXME use for_name_owner?? */
 	dev = dbus_g_proxy_new_for_name(connection, "net.reactivated.Fprint",
 		path, "net.reactivated.Fprint.Device");
 
-	g_ptr_array_foreach(devices, (GFunc) g_free, NULL);
-	g_ptr_array_free(devices, TRUE);
+	g_free (path);
 
 	if (!net_reactivated_Fprint_Device_claim(dev, username, &error))
 		g_error("failed to claim device: %s", error->message);
