@@ -1,13 +1,8 @@
 Identification
 Image transfer
-Imaging
-Automatically ReleaseDevice when application disconnects from bus
-Rethink print handling - we discover on ListEnrolled and rediscover on each LoadPrintData
 
 Enforce command sequences:
  force VerifyStop after non-retry verify result comes in
- only allow GetVerifyResult during a verification
- only allow VerifyStop during a verification
  etc
 
 Rethink enums and results passed, should be strings and D-Bus errors
@@ -19,3 +14,21 @@ http://gitweb.freedesktop.org/?p=DeviceKit/DeviceKit-disks.git;a=tree
 
 Register fprintd' po file with Transifex, Rosetta or the Translation Project
 
+Support insertion/removal of devices
+
+Fix memory leaks with print data/gallery when using the verify_async and
+identify_async
+
+Add some hardware protection by making sure devices aren't opened and
+reading for more than a certain amount of time.
+
+Add POS use case
+
+Review error cases, and possible errors
+
+Do we swipe or scan, devices would know
+
+Export fp_dev_get_nr_enroll_stages and swipe type through properties
+
+Add a "done" argument to verify and enroll result signals, make it easier
+to know when we're done.
