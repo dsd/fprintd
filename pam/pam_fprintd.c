@@ -116,40 +116,46 @@ static gboolean send_err_msg(pam_handle_t *pamh, const char *msg)
 
 struct {
 	const char *dbus_name;
-	const char *finger_name;
+	const char *place_str;
+	const char *swipe_str;
 } fingers[11] = {
-	{ "left-thumb", "Left thumb" },
-	{ "left-index-finger", "Left index finger" },
-	{ "left-middle-finger", "Left middle finger" },
-	{ "left-ring-finger", "Left ring finger" },
-	{ "left-little-finger", "Left little finger" },
-	{ "right-thumb", "Right thumb" },
-	{ "right-index-finger", "Right index finger" },
-	{ "right-middle-finger", "Right middle finger" },
-	{ "right-ring-finger", "Right ring finger" },
-	{ "right-little-finger" "Right little finger" },
-	{ NULL, NULL }
+	{ "left-thumb", "Place your left thumb on %s", "Swipe your left thumb on %s" },
+	{ "left-index-finger", "Place your left index finger on %s", "Swipe your left index finger on %s" },
+	{ "left-middle-finger", "Place your left middle finger on %s", "Swipe your left middle finger on %s" },
+	{ "left-ring-finger", "Place your left ring finger on %s", "Swipe your left ring finger on %s" },
+	{ "left-little-finger", "Place your left little finger on %s", "Swipe your left little finger on %s" },
+	{ "right-thumb", "Place your right thumb on %s", "Swipe your right thumb on %s" },
+	{ "right-index-finger", "Place your right index finger on %s", "Swipe your right index finger on %s" },
+	{ "right-middle-finger", "Place your right middle finger on %s", "Swipe your right middle finger on %s" },
+	{ "right-ring-finger", "Place your right ring finger on %s", "Swipe your right ring finger on %s" },
+	{ "right-little-finger" "Place your right little finger on %s", "Swipe your right little finger on %s" },
+	{ NULL, NULL, NULL }
 };
 
-static const char *fingerstr(const char *finger_name)
+static const char *fingerstr(const char *finger_name, gboolean is_swipe)
 {
 	guint i;
 
 	for (i = 0; fingers[i].dbus_name != NULL; i++) {
-		if (g_str_equal (fingers[i].dbus_name, finger_name))
-			return fingers[i].finger_name;
+		if (g_str_equal (fingers[i].dbus_name, finger_name)) {
+			if (is_swipe == FALSE)
+				return fingers[i].place_str;
+			else
+				return fingers[i].swipe_str;
+		}
 	}
 
-	return NULL;
+	g_assert_not_reached ();
 }
 
 static const char *resulstr(const char *result, gboolean is_swipe)
 {
-	if (g_str_equal (result, "verify-retry-scan"))
+	if (g_str_equal (result, "verify-retry-scan")) {
 		if (is_swipe == FALSE)
 			return "Place your finger on the reader again";
 		else
 			return "Swipe your finger again";
+	}
 	if (g_str_equal (result, "verify-swipe-too-short"))
 		return "Swipe was too short, try again";
 	if (g_str_equal (result, "verify-finger-not-centered"))
@@ -277,10 +283,7 @@ static void verify_finger_selected(GObject *object, const char *finger_name, gpo
 		else
 			msg = g_strdup_printf ("Swipe your finger on %s", data->driver);
 	} else {
-		if (data->is_swipe == FALSE)
-			msg = g_strdup_printf ("Place %s finger on %s", fingerstr(finger_name), data->driver);
-		else
-			msg = g_strdup_printf ("Swipe %s finger on %s", fingerstr(finger_name), data->driver);
+		msg = g_strdup_printf (fingerstr(finger_name, data->is_swipe), data->driver);
 	}
 	D(g_message ("verify_finger_selected %s", msg));
 	send_info_msg (data->pamh, msg);
