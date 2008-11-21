@@ -268,6 +268,10 @@
 </para>
 </xsl:template>
 
+<xsl:template match="doc:title">
+  <refsect2><title role="title.description"><anchor role="description"><xsl:attribute name="id"><xsl:value-of select="@id"/></xsl:attribute></anchor><xsl:value-of select="."/></title></refsect2>
+</xsl:template>
+
 <xsl:template match="doc:description">
 <xsl:apply-templates />
 </xsl:template>
@@ -355,6 +359,9 @@ See also:
       <link><xsl:attribute name="linkend"><xsl:value-of select="$to"/></xsl:attribute><function><xsl:value-of select="$val"/></function></link>
     </xsl:when>
     <xsl:when test="contains($type,'interface')">
+      <link><xsl:attribute name="linkend"><xsl:value-of select="$to"/></xsl:attribute><xsl:value-of select="$val"/></link>
+    </xsl:when>
+    <xsl:when test="contains($type,'description')">
       <link><xsl:attribute name="linkend"><xsl:value-of select="$to"/></xsl:attribute><xsl:value-of select="$val"/></link>
     </xsl:when>
   </xsl:choose>
