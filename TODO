@@ -24,3 +24,4 @@ Add POS use case
 
 Review error cases, and possible errors
 
+Use property instead of a GetProperties method for devices

@@ -1,15 +1,39 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<node name="/">
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
 	<interface name="net.reactivated.Fprint.Manager">
 		<annotation name="org.freedesktop.DBus.GLib.CSymbol"
 			value="fprint_manager" />
 
+		<!-- ************************************************************ -->
+
 		<method name="GetDevices">
-			<arg type="ao" name="devices" direction="out" />
+			<arg type="ao" name="devices" direction="out">
+				<doc:doc><doc:summary>An array of object paths for devices.</doc:summary></doc:doc>
+			</arg>
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Enumerate all the fingerprint readers attached to the system.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
 
+		<!-- ************************************************************ -->
+
 		<method name="GetDefaultDevice">
-			<arg type="o" name="device" direction="out" />
+			<arg type="o" name="device" direction="out">
+				<doc:doc><doc:summary>The object path for the default device.</doc:summary></doc:doc>
+			</arg>
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Returns the default fingerprint reader device.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
 
 	</interface>

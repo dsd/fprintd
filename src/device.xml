@@ -1,60 +1,451 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<node name="/">
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
 	<interface name="net.reactivated.Fprint.Device">
 		<annotation name="org.freedesktop.DBus.GLib.CSymbol"
 			value="fprint_device" />
 
+		<doc:doc>
+			<doc:title id="polkit-integration">
+				PolicyKit integration
+			</doc:title>
+			<doc:para>
+				fprintd uses PolicyKit to check whether users are allowed to access fingerprint data, or the
+				fingerprint readers itself.
+				<doc:list>
+					<doc:item>
+						<doc:term>net.reactivated.fprint.device.verify</doc:term>
+						<doc:definition>
+							Whether the user is allowed to verify fingers against saved fingerprints.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>net.reactivated.fprint.device.enroll</doc:term>
+						<doc:definition>
+							Whether the user is allowed to enroll new fingerprints.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>net.reactivated.fprint.device.setusername</doc:term>
+						<doc:definition>
+							Whether the user is allowed to query, verify, or enroll fingerprints for users other than itself.
+						</doc:definition>
+					</doc:item>
+				</doc:list>
+			</doc:para>
+
+			<doc:title id="usernames">
+				Usernames
+			</doc:title>
+			<doc:para>
+				When a username argument is used for a method, a PolicyKit check is done on the
+				<doc:tt>net.reactivated.fprint.device.setusername</doc:tt> PolicyKit
+				action to see whether the user the client is running as is allowed to access data from other users.
+			</doc:para>
+			<doc:para>
+				By default, only root is allowed to access fingerprint data for users other than itself. For a normal user,
+				it is recommended that you use an empty string for the username, which will mean "the client the user is
+				running as".
+			</doc:para>
+			<doc:para>
+				See <doc:ref type="description" to="polkit-integration">PolicyKit integration</doc:ref>.
+			</doc:para>
+
+			<doc:title id="fingerprint-names">
+				Fingerprint names
+			</doc:title>
+			<doc:para>
+				When a finger name argument is used for a method, it refers to either a single finger, or
+				"any" finger. See the list of possible values below:
+				<doc:list>
+					<doc:item>
+						<doc:term>left-thumb</doc:term>
+						<doc:definition>
+							Left thumb
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>left-index-finger</doc:term>
+						<doc:definition>
+							Left index finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>left-middle-finger</doc:term>
+						<doc:definition>
+							Left middle finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>left-ring-finger</doc:term>
+						<doc:definition>
+							Left ring finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>left-little-finger</doc:term>
+						<doc:definition>
+							Left little finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>right-thumb</doc:term>
+						<doc:definition>
+							Right thumb
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>right-index-finger</doc:term>
+						<doc:definition>
+							Right index finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>right-middle-finger</doc:term>
+						<doc:definition>
+							Right middle finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>right-ring-finger</doc:term>
+						<doc:definition>
+							Right ring finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>right-little-finger</doc:term>
+						<doc:definition>
+							Right little finger
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>any</doc:term>
+						<doc:definition>
+							Any finger. This is only used for <doc:ref type="method" to="Device.VerifyStart">Device.VerifyStart</doc:ref>
+							(select the first finger with a fingerprint associated, or all the fingerprints available for the user when
+							the device supports it) and <doc:ref type="signal" to="Device::VerifyFingerSelected">Device::VerifyFingerSelected</doc:ref>
+							(any finger with an associated fingerprint can be used).
+						</doc:definition>
+					</doc:item>
+				</doc:list>
+			</doc:para>
+
+			<doc:title id="verify-statuses">
+				Verify Statuses
+			</doc:title>
+			<doc:para>
+				<doc:list>
+					Possible values for the result passed through <doc:ref type="signal" to="Device::VerifyResult">Device::VerifyResult</doc:ref> are:
+					<doc:item>
+						<doc:term>verify-no-match</doc:term>
+						<doc:definition>
+							The verification did not match, <doc:ref type="method" to="Device.VerifyStop">Device.VerifyStop</doc:ref> should now be called.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>verify-match</doc:term>
+						<doc:definition>
+							The verification succeeded, <doc:ref type="method" to="Device.VerifyStop">Device.VerifyStop</doc:ref> should now be called.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>verify-retry-scan</doc:term>
+						<doc:definition>
+							The user should retry scanning their finger, the verification is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>verify-swipe-too-short</doc:term>
+						<doc:definition>
+							The user's swipe was too short. The user should retry scanning their finger, the verification is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>verify-finger-not-centered</doc:term>
+						<doc:definition>
+							The user's finger was not centered on the reader. The user should retry scanning their finger, the verification is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>verify-remove-and-retry</doc:term>
+						<doc:definition>
+							The user should remove their finger from the reader and retry scanning their finger, the verification is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>verify-unknown-error</doc:term>
+						<doc:definition>
+							An unknown error occurred (usually a driver problem), <doc:ref type="method" to="Device.VerifyStop">Device.VerifyStop</doc:ref> should now be called.
+						</doc:definition>
+					</doc:item>
+				</doc:list>
+			</doc:para>
+
+			<doc:title id="enroll-statuses">
+				Enroll Statuses
+			</doc:title>
+			<doc:para>
+				<doc:list>
+					Possible values for the result passed through <doc:ref type="signal" to="Device::EnrollResult">Device::EnrollResult</doc:ref> are:
+					<doc:item>
+						<doc:term>enroll-completed</doc:term>
+						<doc:definition>
+							The enrollment successfully completed, <doc:ref type="method" to="Device.EnrollStop">Device.EnrollStop</doc:ref> should now be called.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-failed</doc:term>
+						<doc:definition>
+							The enrollment failed, <doc:ref type="method" to="Device.EnrollStop">Device.EnrollStop</doc:ref> should now be called.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-stage-passed</doc:term>
+						<doc:definition>
+							One stage of the enrollment passed, the enrollment is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-retry-scan</doc:term>
+						<doc:definition>
+							The user should retry scanning their finger, the enrollment is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-swipe-too-short</doc:term>
+						<doc:definition>
+							The user's swipe was too short. The user should retry scanning their finger, the enrollment is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-finger-not-centered</doc:term>
+						<doc:definition>
+							The user's finger was not centered on the reader. The user should retry scanning their finger, the enrollment is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-remove-and-retry</doc:term>
+						<doc:definition>
+							The user should remove their finger from the reader and retry scanning their finger, the enrollment is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-unknown-error</doc:term>
+						<doc:definition>
+							An unknown error occurred (usually a driver problem), <doc:ref type="method" to="Device.EnrollStop">Device.EnrollStop</doc:ref> should now be called.
+
+						</doc:definition>
+					</doc:item>
+				</doc:list>
+			</doc:para>
+		</doc:doc>
+
+		<!-- ************************************************************ -->
+
 		<method name="ListEnrolledFingers">
-			<arg type="s" name="username" direction="in" />
-			<arg type="as" name="enrolled_fingers" direction="out" />
+			<arg type="s" name="username" direction="in">
+				<doc:doc><doc:summary>The username for whom to list the enrolled fingerprints. See <doc:ref type="description" to="usernames">Usernames</doc:ref>.</doc:summary></doc:doc>
+			</arg>
+			<arg type="as" name="enrolled_fingers" direction="out">
+				<doc:doc><doc:summary>An array of strings representing the enrolled fingerprints. See <doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.</doc:summary></doc:doc>
+			</arg>
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						List all the enrolled fingerprints for the chosen user.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
+
+		<!-- ************************************************************ -->
 
 		<method name="DeleteEnrolledFingers">
-			<arg type="s" name="username" direction="in" />
+			<arg type="s" name="username" direction="in">
+				<doc:doc><doc:summary>The username for whom to delete the enrolled fingerprints. See <doc:ref type="description" to="usernames">Usernames</doc:ref>.</doc:summary></doc:doc>
+			</arg>
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Delete all the enrolled fingerprints for the chosen user.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
 
+		<!-- ************************************************************ -->
+
 		<method name="Claim">
-			<arg type="s" name="username" direction="in" />
+			<arg type="s" name="username" direction="in">
+				<doc:doc><doc:summary>The username for whom to claim the device. See <doc:ref type="description" to="usernames">Usernames</doc:ref>.</doc:summary></doc:doc>
+			</arg>
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Claim the device for the chosen user.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
+
+		<!-- ************************************************************ -->
 
 		<method name="Release">
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Release a device claimed with <doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref>.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
 
+		<!-- ************************************************************ -->
+
 		<method name="VerifyStart">
-			<arg type="s" name="finger_name" direction="in" />
+			<arg type="s" name="finger_name" direction="in">
+				<doc:doc><doc:summary>A string representing the finger to verify. See <doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.</doc:summary></doc:doc>
+			</arg>
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Check the chosen finger against a saved fingerprint. You need to have claimed the device using
+						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref>.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
+
+		<!-- ************************************************************ -->
 
 		<method name="VerifyStop">
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Stop an on-going fingerprint verification started with <doc:ref type="method" to="Device.VerifyStart">Device.VerifyStart</doc:ref>.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
+
+		<!-- ************************************************************ -->
 
 		<signal name="VerifyFingerSelected">
-			<arg type="s" name="finger_name" />
+			<arg type="s" name="finger_name">
+				<doc:doc>
+					<doc:summary>
+						<doc:para>
+							A string representing the finger select to be verified.
+						</doc:para>
+					</doc:summary>
+				</doc:doc>
+			</arg>
+			<doc:doc>
+				<doc:seealso>
+					<doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.
+				</doc:seealso>
+			</doc:doc>
 		</signal>
+
+		<!-- ************************************************************ -->
 
 		<signal name="VerifyStatus">
-			<arg type="s" name="result" />
-			<arg type="b" name="done" />
+			<arg type="s" name="result">
+				<doc:doc>
+					<doc:summary>
+						A string representing the status of the verification status.
+					</doc:summary>
+				</doc:doc>
+			</arg>
+
+			<arg type="b" name="done">
+				<doc:doc>
+					<doc:summary>
+						Whether the verification finished and can be stopped.
+					</doc:summary>
+				</doc:doc>
+			</arg>
+
+			<doc:doc>
+				<doc:seealso>
+					<doc:ref type="description" to="verify-statuses">Verify Statuses</doc:ref> and <doc:ref type="method" to="Device.VerifyStop">Device.VerifyStop</doc:ref>.
+				</doc:seealso>
+			</doc:doc>
 		</signal>
 
+		<!-- ************************************************************ -->
+
 		<method name="EnrollStart">
-			<arg type="s" name="finger_name" direction="in" />
+			<arg type="s" name="finger_name" direction="in">
+				<doc:doc><doc:summary>A string representing the finger to enroll. See
+				<doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.
+				Note that "any" is not a valid finger name for this method.</doc:summary></doc:doc>
+			</arg>
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Start enrollemnt for the selected finger. You need to have claimed the device using
+						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref> before calling
+						this method.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
+
+		<!-- ************************************************************ -->
 
 		<method name="EnrollStop">
 			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Stop an on-going fingerprint enrollment started with <doc:ref type="method" to="Device.EnrollStart">Device.EnrollStart</doc:ref>.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
 		</method>
 
+		<!-- ************************************************************ -->
+
 		<signal name="EnrollStatus">
-			<arg type="s" name="result" />
-			<arg type="b" name="done" />
+			<arg type="s" name="result">
+				<doc:doc>
+					<doc:summary>
+						A string representing the status of the enrollment status.
+					</doc:summary>
+				</doc:doc>
+			</arg>
+
+			<arg type="b" name="done">
+				<doc:doc>
+					<doc:summary>
+						Whether the enrollment finished and can be stopped.
+					</doc:summary>
+				</doc:doc>
+			</arg>
+
+			<doc:doc>
+				<doc:seealso>
+					<doc:ref type="description" to="enroll-statuses">Enrollment Statuses</doc:ref> and <doc:ref type="method" to="Device.EnrollStop">Device.EnrollStop</doc:ref>.
+				</doc:seealso>
+			</doc:doc>
 		</signal>
+
+		<!-- ************************************************************ -->
 
 		<method name="GetProperties">
 			<arg type="a{sv}" name="properties" direction="out" />
