@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <pwd.h>
 
+#include "fprintd-marshal.h"
 #include "fprintd.h"
 #include "storage.h"
 #include "egg-dbus-monitor.h"
@@ -203,10 +204,10 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 
 	signals[SIGNAL_VERIFY_STATUS] = g_signal_new("verify-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
+		fprintd_marshal_VOID__STRING_BOOLEAN, G_TYPE_NONE, 2, G_TYPE_STRING, G_TYPE_BOOLEAN);
 	signals[SIGNAL_ENROLL_STATUS] = g_signal_new("enroll-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
+		fprintd_marshal_VOID__STRING_BOOLEAN, G_TYPE_NONE, 2, G_TYPE_STRING, G_TYPE_BOOLEAN);
 	signals[SIGNAL_VERIFY_FINGER_SELECTED] = g_signal_new("verify-finger-selected",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
 		g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
@@ -733,9 +734,13 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 {
 	struct FprintDevice *rdev = user_data;
 	const char *name = verify_result_to_name (r);
+	gboolean done = FALSE;
+
 	g_message("verify_cb: result %s (%d)", name, r);
 
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name);
+	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
+		done = TRUE;
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, done);
 	fp_img_free(img);
 }
 
@@ -744,9 +749,13 @@ static void identify_cb(struct fp_dev *dev, int r,
 {
 	struct FprintDevice *rdev = user_data;
 	const char *name = verify_result_to_name (r);
+	gboolean done = FALSE;
+
 	g_message("identify_cb: result %s (%d)", name, r);
 
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name);
+	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
+		done = TRUE;
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, done);
 	fp_img_free(img);
 }
 
@@ -933,6 +942,7 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
+	gboolean done = FALSE;
 	int r;
 
 	g_message("enroll_stage_cb: result %d", result);
@@ -942,7 +952,9 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 			result = FP_ENROLL_FAIL;
 	}
 
-	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, enroll_result_to_name (result));
+	if (result == FP_ENROLL_COMPLETE || result == FP_ENROLL_FAIL || result < 0)
+		done = TRUE;
+	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, enroll_result_to_name (result), done);
 	fp_img_free(img);
 	fp_print_data_free(print);
 }

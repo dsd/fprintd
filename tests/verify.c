@@ -96,13 +96,11 @@ static void find_finger(DBusGProxy *dev, const char *username)
 	g_strfreev (fingers);
 }
 
-static void verify_result(GObject *object, const char *result, void *user_data)
+static void verify_result(GObject *object, const char *result, gboolean done, void *user_data)
 {
 	gboolean *verify_completed = user_data;
 	g_print("Verify result: %s\n", result);
-	if (g_str_equal (result, "verify-no-match") ||
-	    g_str_equal (result, "verify-match") ||
-	    g_str_equal (result, "verify-unknown-error"))
+	if (done != FALSE)
 		*verify_completed = TRUE;
 }
 

@@ -65,13 +65,12 @@ static DBusGProxy *open_device(const char *username)
 	return dev;
 }
 
-static void enroll_result(GObject *object, const char *result, void *user_data)
+static void enroll_result(GObject *object, const char *result, gboolean done, void *user_data)
 {
 	gboolean *enroll_completed = user_data;
 	g_print("Enroll result: %s\n", result);
-	if (g_str_equal(result, "enroll-completed") ||
-	    g_str_equal(result, "enroll-failed") ||
-	    g_str_equal(result, "enroll-unknown-error"))
+	if (done != FALSE)
+		*enroll_completed = TRUE;
 		*enroll_completed = TRUE;
 }
 

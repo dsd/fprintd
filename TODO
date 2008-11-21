@@ -24,5 +24,3 @@ Add POS use case
 
 Review error cases, and possible errors
 
-Add a "done" argument to verify and enroll result signals, make it easier
-to know when we're done.

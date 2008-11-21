@@ -39,6 +39,7 @@
 
 		<signal name="VerifyStatus">
 			<arg type="s" name="result" />
+			<arg type="b" name="done" />
 		</signal>
 
 		<method name="EnrollStart">
@@ -52,6 +53,7 @@
 
 		<signal name="EnrollStatus">
 			<arg type="s" name="result" />
+			<arg type="b" name="done" />
 		</signal>
 
 		<method name="GetProperties">

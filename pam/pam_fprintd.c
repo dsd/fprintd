@@ -254,15 +254,13 @@ typedef struct {
 	char *driver;
 } verify_data;
 
-static void verify_result(GObject *object, const char *result, gpointer user_data)
+static void verify_result(GObject *object, const char *result, gboolean done, gpointer user_data)
 {
 	verify_data *data = user_data;
 	const char *msg;
 
 	D(g_message("Verify result: %s\n", result));
-	if (g_str_equal (result, "verify-no-match") ||
-	    g_str_equal (result, "verify-match") ||
-	    g_str_equal (result, "verify-unknown-error")) {
+	if (done != FALSE) {
 		data->result = g_strdup (result);
 		g_main_loop_quit (data->loop);
 		return;
