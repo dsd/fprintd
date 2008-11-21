@@ -33,17 +33,9 @@
 #include "storage.h"
 #include "file_storage.h"
 
-DBusGConnection *fprintd_dbus_conn = NULL;
-gboolean no_timeout = FALSE;
+extern DBusGConnection *fprintd_dbus_conn;
+static gboolean no_timeout = FALSE;
 static gboolean g_fatal_warnings = FALSE;
-
-GQuark fprint_error_quark(void)
-{
-	static GQuark quark = 0;
-	if (!quark)
-		quark = g_quark_from_static_string("fprintd-error-quark");
-	return quark;
-}
 
 struct fdsource {
 	GSource source;
@@ -353,7 +345,7 @@ int main(int argc, char **argv)
 
 	/* create the one instance of the Manager object to be shared between
 	 * all fprintd users */
-	manager = fprint_manager_new();
+	manager = fprint_manager_new(no_timeout);
 	error = fprint_manager_get_error (manager);
 	if (error != NULL) {
 		g_error("Couldn't create manager object: %s", error->message);

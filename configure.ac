@@ -4,6 +4,7 @@ AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_HEADERS([config.h])
 
 AC_PREREQ([2.50])
+AC_PROG_LIBTOOL
 AC_PROG_CC
 AM_PROG_CC_C_O
 
@@ -47,6 +48,9 @@ AC_MSG_RESULT([$has_pam])
 AC_CHECK_PROG([POLKIT_POLICY_FILE_VALIDATE],
 	      [polkit-policy-file-validate], [polkit-policy-file-validate])
 
+AC_PATH_PROG([XSLTPROC], [xsltproc])
+GTK_DOC_CHECK([1.3])
+
 AS_AC_EXPAND(DATADIR, $datadir)
 
 DBUS_SERVICES_DIR="$DATADIR/dbus-1/services"
@@ -57,6 +61,14 @@ AC_DEFINE_UNQUOTED(SYSCONFDIR, "$sysconfdir", [Where the configuration file will
 
 GNOME_COMPILE_WARNINGS
 
-AC_CONFIG_FILES([Makefile] [src/Makefile] [data/Makefile] [tests/Makefile] [pam/Makefile] [po/Makefile.in])
-AC_OUTPUT
-
+AC_OUTPUT([
+Makefile
+src/Makefile
+data/Makefile
+tests/Makefile
+pam/Makefile
+doc/Makefile
+doc/version.xml
+doc/dbus/Makefile
+po/Makefile.in
+])

@@ -5,17 +5,22 @@ CLEANFILES = $(BUILT_SOURCES)
 EXTRA_DIST = manager.xml device.xml fprintd-marshal.list
 
 libexec_PROGRAMS = fprintd
+noinst_LTLIBRARIES = libfprintd.la
+
+AM_CFLAGS = $(WARN_CFLAGS) $(FPRINT_CFLAGS) $(DAEMON_CFLAGS) -DLOCALEDIR=\""$(datadir)/locale"\" -DPLUGINDIR=\""$(libdir)/fprintd/modules"\"
+
+libfprintd_la_SOURCES =				\
+	manager.c device.c			\
+	egg-dbus-monitor.c egg-dbus-monitor.h	\
+	$(MARSHALFILES)				\
+	fprintd.h
+libfprintd_la_LIBADD = $(FPRINT_LIBS) $(DAEMON_LIBS)
+libfprintd_la_LDFLAGS = -no-undefined
 
 fprintd_SOURCES =				\
-	main.c fprintd.h			\
-	manager.c				\
-	device.c				\
-	file_storage.c file_storage.h storage.h	\
-	egg-dbus-monitor.c egg-dbus-monitor.h	\
-	$(MARSHALFILES)
-
-fprintd_LDADD = $(FPRINT_LIBS) $(DAEMON_LIBS)
-fprintd_CFLAGS = $(WARN_CFLAGS) $(FPRINT_CFLAGS) $(DAEMON_CFLAGS) -DLOCALEDIR=\""$(datadir)/locale"\" -DPLUGINDIR=\""$(libdir)/fprintd/modules"\"
+	main.c					\
+	file_storage.c file_storage.h storage.h
+fprintd_LDADD = libfprintd.la
 
 manager-dbus-glue.h: manager.xml
 	dbus-binding-tool --prefix=fprint_manager --mode=glib-server $< --output=$@

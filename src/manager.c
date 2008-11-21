@@ -27,6 +27,8 @@
 
 #include "fprintd.h"
 
+DBusGConnection *fprintd_dbus_conn;
+
 static gboolean fprint_manager_get_devices(FprintManager *manager,
 	GPtrArray **devices, GError **error);
 static gboolean fprint_manager_get_default_device(FprintManager *manager,
@@ -41,6 +43,7 @@ typedef struct
 {
 	GError *last_error;
 	GSList *dev_registry;
+	gboolean no_timeout;
 	guint timeout_id;
 } FprintManagerPrivate;
 
@@ -105,7 +108,7 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 			num_devices_used++;
 	}
 
-	if (num_devices_used == 0 && !no_timeout)
+	if (num_devices_used == 0 && !priv->no_timeout)
 		priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, manager);
 }
 
@@ -140,13 +143,20 @@ fprint_manager_init (FprintManager *manager)
 		g_free(path);
 	}
 
-	if (!no_timeout)
+	if (!priv->no_timeout)
 		priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, manager);
 }
 
-FprintManager *fprint_manager_new(void)
+FprintManager *fprint_manager_new(gboolean no_timeout)
 {
-	return g_object_new(FPRINT_TYPE_MANAGER, NULL);
+	FprintManagerPrivate *priv;
+	GObject *object;
+
+	object = g_object_new(FPRINT_TYPE_MANAGER, NULL);
+	priv = FPRINT_MANAGER_GET_PRIVATE (object);
+	priv->no_timeout = no_timeout;
+
+	return FPRINT_MANAGER (object);
 }
 
 GError *fprint_manager_get_error(FprintManager *manager)
@@ -192,3 +202,12 @@ static gboolean fprint_manager_get_default_device(FprintManager *manager,
 		return FALSE;
 	}
 }
+
+GQuark fprint_error_quark(void)
+{
+	static GQuark quark = 0;
+	if (!quark)
+		quark = g_quark_from_static_string("fprintd-error-quark");
+	return quark;
+}
+

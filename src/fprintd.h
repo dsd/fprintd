@@ -27,7 +27,6 @@
 #define TIMEOUT 30
 #define FPRINT_SERVICE_NAME "net.reactivated.Fprint"
 extern DBusGConnection *fprintd_dbus_conn;
-extern gboolean no_timeout;
 GQuark fprint_error_quark(void);
 
 /* Errors */
@@ -66,7 +65,7 @@ struct FprintManagerClass {
 typedef struct FprintManager FprintManager;
 typedef struct FprintManagerClass FprintManagerClass;
 
-FprintManager *fprint_manager_new(void);
+FprintManager *fprint_manager_new(gboolean no_timeout);
 GError *fprint_manager_get_error(FprintManager *manager);
 GType fprint_manager_get_type(void);
 
