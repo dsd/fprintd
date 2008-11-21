@@ -95,10 +95,12 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 	GSList *l;
 	gboolean in_use;
 
-	if (priv->timeout_id > 0) {
+	if (priv->timeout_id > 0 || !priv->no_timeout) {
 		g_source_remove (priv->timeout_id);
 		priv->timeout_id = 0;
 	}
+	if (!priv->no_timeout)
+		return;
 
 	for (l = priv->dev_registry; l != NULL; l = l->next) {
 		FprintDevice *dev = l->data;
@@ -142,9 +144,6 @@ fprint_manager_init (FprintManager *manager)
 			G_OBJECT(rdev));
 		g_free(path);
 	}
-
-	if (!priv->no_timeout)
-		priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, manager);
 }
 
 FprintManager *fprint_manager_new(gboolean no_timeout)
@@ -155,6 +154,9 @@ FprintManager *fprint_manager_new(gboolean no_timeout)
 	object = g_object_new(FPRINT_TYPE_MANAGER, NULL);
 	priv = FPRINT_MANAGER_GET_PRIVATE (object);
 	priv->no_timeout = no_timeout;
+
+	if (!priv->no_timeout)
+		priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, object);
 
 	return FPRINT_MANAGER (object);
 }
