@@ -44,6 +44,7 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 	GError *error = NULL;
 	char **fingers;
 	GHashTable *props;
+	DBusGProxy *p;
 	guint i;
 
 	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, username, &fingers, &error))
@@ -54,14 +55,19 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 		return;
 	}
 
-	if (!net_reactivated_Fprint_Device_get_properties(dev, &props, &error))
-		g_error("GetProperties failed: %s", error->message);
+	p = dbus_g_proxy_new_for_name(connection,
+				      "net.reactivated.Fprint", dbus_g_proxy_get_path (dev),
+				      "org.freedesktop.DBus.Properties");
+	if (!dbus_g_proxy_call (p, "GetAll", &error, G_TYPE_STRING, "net.reactivated.Fprint.Device", G_TYPE_INVALID,
+			   dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID))
+		g_error("GetAll on the Properties interface failed: %s", error->message);
 
 	g_print("Fingerprints for user %s on %s (%s):\n",
 		username,
-		g_value_get_string (g_hash_table_lookup (props, "Name")),
-		g_value_get_string (g_hash_table_lookup (props, "ScanType")));
+		g_value_get_string (g_hash_table_lookup (props, "name")),
+		g_value_get_string (g_hash_table_lookup (props, "scan-type")));
 	g_hash_table_destroy (props);
+	g_object_unref (p);
 
 	for (i = 0; fingers[i] != NULL; i++) {
 		g_print(" - #%d: %s\n", i, fingers[i]);

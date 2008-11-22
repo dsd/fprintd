@@ -7,9 +7,6 @@ Enforce command sequences:
 
 Verify PAM messages fit with GDM/gnome-screensaver
 
-Add API docs (see doc/dbus and doc subdir):
-http://gitweb.freedesktop.org/?p=DeviceKit/DeviceKit-disks.git;a=tree
-
 Register fprintd' po file with Transifex, Rosetta or the Translation Project
 
 Support insertion/removal of devices
@@ -24,4 +21,3 @@ Add POS use case
 
 Review error cases, and possible errors
 
-Use property instead of a GetProperties method for devices

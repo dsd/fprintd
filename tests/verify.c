@@ -23,6 +23,7 @@
 #include <dbus/dbus-glib-bindings.h>
 #include "manager-dbus-glue.h"
 #include "device-dbus-glue.h"
+#include "marshal.h"
 
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
@@ -114,10 +115,10 @@ static void do_verify(DBusGProxy *dev)
 	GError *error;
 	gboolean verify_completed = FALSE;
 
-	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_INT, NULL);
+	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_STRING, G_TYPE_BOOLEAN, NULL);
 	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_INT, NULL);
 	dbus_g_proxy_connect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result),
-		&verify_completed, NULL);
+				    &verify_completed, NULL);
 	dbus_g_proxy_connect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected),
 		NULL, NULL);
 
@@ -157,6 +158,9 @@ int main(int argc, char **argv)
 	char *username;
 
 	g_type_init();
+
+	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
+					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
 
 	context = g_option_context_new ("Verify a fingerprint");
 	g_option_context_add_main_entries (context, entries, NULL);

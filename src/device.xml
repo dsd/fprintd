@@ -447,10 +447,42 @@
 
 		<!-- ************************************************************ -->
 
-		<method name="GetProperties">
-			<arg type="a{sv}" name="properties" direction="out" />
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-		</method>
+		<property name="name" type="s" access="read">
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						The product name of the device.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
+		</property>
+
+		<!-- ************************************************************ -->
+
+		<property name="num-enroll-stages" type="i" access="read">
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						The number of enrollment stages for the device. This is only available when the device has been claimed, otherwise it will be undefined (-1).
+					</doc:para>
+					<doc:seealso>
+						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref> and <doc:ref type="method" to="Device.EnrollStart">Device.EnrollStart</doc:ref>.
+					</doc:seealso>
+				</doc:description>
+			</doc:doc>
+		</property>
+
+		<!-- ************************************************************ -->
+
+		<property name="scan-type" type="s" access="read">
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						The scan type of the device, either "press" if you place your finger on the device, or "swipe" if you have to swipe your finger.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
+		</property>
 
 	</interface>
 </node>

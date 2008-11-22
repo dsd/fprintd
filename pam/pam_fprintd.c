@@ -32,6 +32,8 @@
 #define PAM_SM_AUTH
 #include <security/pam_modules.h>
 
+#include "marshal.h"
+
 #define MAX_TRIES 3
 #define TIMEOUT 30
 
@@ -303,6 +305,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 {
 	GError *error;
 	GHashTable *props;
+	DBusGProxy *p;
 	verify_data *data;
 	int ret;
 
@@ -311,20 +314,28 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 	data->pamh = pamh;
 	data->loop = loop;
 
-	if (dbus_g_proxy_call (dev, "GetProperties", &error, G_TYPE_INVALID,
-			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_STRING), &props, G_TYPE_INVALID)) {
+	/* Get some properties for the device */
+	p = dbus_g_proxy_new_for_name(connection,
+				      "net.reactivated.Fprint", dbus_g_proxy_get_path (dev),
+				      "org.freedesktop.DBus.Properties");
+
+	if (dbus_g_proxy_call (p, "GetAll", &error, G_TYPE_INVALID,
+			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID)) {
 		const char *scan_type;
-		data->driver = g_value_dup_string (g_hash_table_lookup (props, "Name"));
-		scan_type = g_value_dup_string (g_hash_table_lookup (props, "ScanType"));
+		data->driver = g_value_dup_string (g_hash_table_lookup (props, "name"));
+		scan_type = g_value_dup_string (g_hash_table_lookup (props, "scan-type"));
 		if (g_str_equal (scan_type, "swipe"))
 			data->is_swipe = TRUE;
 		g_hash_table_destroy (props);
 	}
+
+	g_object_unref (p);
+
 	if (!data->driver)
 		data->driver = g_strdup ("Fingerprint reader");
 
-	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_INT, NULL);
-	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_INT, NULL);
+	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_STRING, G_TYPE_BOOLEAN, NULL);
+	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_STRING, NULL);
 	dbus_g_proxy_connect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result),
 				    data, NULL);
 	dbus_g_proxy_connect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected),
@@ -343,7 +354,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 
 		data->timed_out = FALSE;
 
-		if (!dbus_g_proxy_call (dev, "VerifyStart", &error, G_TYPE_UINT, -1, G_TYPE_INVALID, G_TYPE_INVALID)) {
+		if (!dbus_g_proxy_call (dev, "VerifyStart", &error, G_TYPE_STRING, "any", G_TYPE_INVALID, G_TYPE_INVALID)) {
 			D(g_message("VerifyStart failed: %s", error->message));
 			g_error_free (error);
 
@@ -433,6 +444,9 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	int r;
 
 	g_type_init ();
+
+	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
+					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
 
 	pam_get_item(pamh, PAM_RHOST, (const void **)(const void*) &rhost);
 	if (rhost != NULL && strlen(rhost) > 0) {

@@ -21,6 +21,7 @@
 #include <dbus/dbus-glib-bindings.h>
 #include "manager-dbus-glue.h"
 #include "device-dbus-glue.h"
+#include "marshal.h"
 
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
@@ -79,9 +80,9 @@ static void do_enroll(DBusGProxy *dev)
 	GError *error;
 	gboolean enroll_completed = FALSE;
 
-	dbus_g_proxy_add_signal(dev, "EnrollStatus", G_TYPE_INT, NULL);
+	dbus_g_proxy_add_signal(dev, "EnrollStatus", G_TYPE_STRING, G_TYPE_BOOLEAN, NULL);
 	dbus_g_proxy_connect_signal(dev, "EnrollStatus", G_CALLBACK(enroll_result),
-		&enroll_completed, NULL);
+				    &enroll_completed, NULL);
 
 	g_print("Enrolling right index finger.\n");
 	if (!net_reactivated_Fprint_Device_enroll_start(dev, "right-index-finger", &error))
@@ -111,6 +112,10 @@ int main(int argc, char **argv)
 	char *username;
 
 	g_type_init();
+
+	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
+					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
+
 	loop = g_main_loop_new(NULL, FALSE);
 	create_manager();
 

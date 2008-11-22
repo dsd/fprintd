@@ -68,8 +68,6 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  const char *username,
 						  DBusGMethodInvocation *context);
-static void fprint_device_get_properties (FprintDevice *rdev,
-					  DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
@@ -123,6 +121,9 @@ typedef struct FprintDevicePrivate FprintDevicePrivate;
 enum fprint_device_properties {
 	FPRINT_DEVICE_CONSTRUCT_DDEV = 1,
 	FPRINT_DEVICE_IN_USE,
+	FPRINT_DEVICE_NAME,
+	FPRINT_DEVICE_NUM_ENROLL,
+	FPRINT_DEVICE_SCAN_TYPE
 };
 
 enum fprint_device_signals {
@@ -171,6 +172,26 @@ static void fprint_device_get_property(GObject *object, guint property_id,
 	case FPRINT_DEVICE_IN_USE:
 		g_value_set_boolean(value, g_hash_table_size (priv->clients) != 0);
 		break;
+	case FPRINT_DEVICE_NAME:
+		g_value_set_static_string (value, fp_driver_get_full_name (fp_dscv_dev_get_driver (priv->ddev)));
+		break;
+	case FPRINT_DEVICE_NUM_ENROLL:
+		if (priv->dev)
+			g_value_set_int (value, fp_dev_get_nr_enroll_stages (priv->dev));
+		else
+			g_value_set_int (value, -1);
+		break;
+	case FPRINT_DEVICE_SCAN_TYPE: {
+		const char *type;
+
+		if (fp_driver_get_scan_type (fp_dscv_dev_get_driver (priv->ddev)) == FP_SCAN_TYPE_PRESS)
+			type = "press";
+		else
+			type = "swipe";
+
+		g_value_set_static_string (value, type);
+		break;
+	}
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
 		break;
@@ -192,15 +213,34 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 	g_type_class_add_private(klass, sizeof(FprintDevicePrivate));
 
 	pspec = g_param_spec_pointer("discovered-dev", "Discovered device",
-		"Set discovered device construction property",
-		G_PARAM_CONSTRUCT_ONLY | G_PARAM_WRITABLE);
+				     "Set discovered device construction property",
+				     G_PARAM_CONSTRUCT_ONLY | G_PARAM_WRITABLE);
 	g_object_class_install_property(gobject_class,
-		FPRINT_DEVICE_CONSTRUCT_DDEV, pspec);
+					FPRINT_DEVICE_CONSTRUCT_DDEV, pspec);
+
 	pspec = g_param_spec_boolean("in-use", "In use",
-				 "Whether the device is currently in use", FALSE,
-				 G_PARAM_READABLE);
+				     "Whether the device is currently in use", FALSE,
+				     G_PARAM_READABLE);
 	g_object_class_install_property(gobject_class,
 					FPRINT_DEVICE_IN_USE, pspec);
+
+	pspec = g_param_spec_string("name", "Name",
+				    "The product name of the device", NULL,
+				    G_PARAM_READABLE);
+	g_object_class_install_property(gobject_class,
+					FPRINT_DEVICE_NAME, pspec);
+
+	pspec = g_param_spec_string("scan-type", "Scan Type",
+				    "The scan type of the device", "press",
+				    G_PARAM_READABLE);
+	g_object_class_install_property(gobject_class,
+					FPRINT_DEVICE_SCAN_TYPE, pspec);
+
+	pspec = g_param_spec_int("num-enroll-stages", "Number of enrollments stages",
+				  "Number of enrollment stages for the device.",
+				  -1, G_MAXINT, -1, G_PARAM_READABLE);
+	g_object_class_install_property(gobject_class,
+					FPRINT_DEVICE_NUM_ENROLL, pspec);
 
 	signals[SIGNAL_VERIFY_STATUS] = g_signal_new("verify-status",
 		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
@@ -1145,37 +1185,5 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 	g_free (user);
 
 	dbus_g_method_return(context);
-}
-
-static void fprint_device_get_properties (FprintDevice *rdev,
-					  DBusGMethodInvocation *context)
-{
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
-	GHashTable *table;
-	GValue *value;
-
-	table = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-
-	value = g_new0 (GValue, 1);
-	g_value_init (value, G_TYPE_STRING);
-	g_value_set_string (value, fp_driver_get_full_name (fp_dscv_dev_get_driver (priv->ddev)));
-	g_hash_table_insert (table, "Name", value);
-
-	value = g_new0 (GValue, 1);
-	g_value_init (value, G_TYPE_STRING);
-	g_value_set_static_string (value,
-				   fp_driver_get_scan_type (fp_dscv_dev_get_driver (priv->ddev)) == FP_SCAN_TYPE_PRESS ? "press" : "swipe");
-	g_hash_table_insert (table, "ScanType", value);
-
-	if (priv->dev != NULL) {
-		value = g_new0 (GValue, 1);
-		g_value_init (value, G_TYPE_INT);
-		g_value_set_int (value, fp_dev_get_nr_enroll_stages (priv->dev));
-		g_hash_table_insert (table, "NumberEnrollStages", value);
-	}
-
-	dbus_g_method_return (context, table);
-
-	g_hash_table_destroy (table);
 }
 
