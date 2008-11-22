@@ -303,7 +303,7 @@ static gboolean verify_timeout_cb (gpointer user_data)
 
 static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev)
 {
-	GError *error;
+	GError *error = NULL;
 	GHashTable *props;
 	DBusGProxy *p;
 	verify_data *data;
@@ -319,7 +319,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 				      "net.reactivated.Fprint", dbus_g_proxy_get_path (dev),
 				      "org.freedesktop.DBus.Properties");
 
-	if (dbus_g_proxy_call (p, "GetAll", &error, G_TYPE_INVALID,
+	if (dbus_g_proxy_call (p, "GetAll", NULL, G_TYPE_STRING, "net.reactivated.Fprint.Device", G_TYPE_INVALID,
 			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID)) {
 		const char *scan_type;
 		data->driver = g_value_dup_string (g_hash_table_lookup (props, "name"));
