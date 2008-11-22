@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
+#include <syslog.h>
 
 #include <dbus/dbus-glib-bindings.h>
 #include <dbus/dbus-glib-lowlevel.h>
@@ -37,13 +38,17 @@
 #define MAX_TRIES 3
 #define TIMEOUT 30
 
-/* #define DEBUG */
+#define D(pamh, ...) {					\
+	if (debug) {					\
+		char *s;				\
+		s = g_strdup_printf (__VA_ARGS__);	\
+		send_debug_msg (pamh, s);		\
+		g_free (s);				\
+	}						\
+}
 
-#ifdef DEBUG
-#define D(x) x
-#else
-#define D(x)
-#endif
+
+static gboolean debug = FALSE;
 
 enum fp_verify_result {
 	VERIFY_NO_MATCH = 0,
@@ -116,6 +121,24 @@ static gboolean send_err_msg(pam_handle_t *pamh, const char *msg)
 	return (pc->conv(1, &msgp, &resp, pc->appdata_ptr) == PAM_SUCCESS);
 }
 
+static void send_debug_msg(pam_handle_t *pamh, const char *msg)
+{
+	gconstpointer item;
+	const char *service;
+
+	if (pam_get_item(pamh, PAM_SERVICE, &item) != PAM_SUCCESS || !item)
+		service = "<unknown>";
+	else
+		service = item;
+
+	openlog (service, LOG_CONS | LOG_PID, LOG_AUTHPRIV);
+
+	syslog (LOG_AUTHPRIV|LOG_WARNING, "%s(%s): %s", "pam_fprintd", service, msg);
+
+	closelog ();
+
+}
+
 struct {
 	const char *dbus_name;
 	const char *place_str;
@@ -167,7 +190,7 @@ static const char *resulstr(const char *result, gboolean is_swipe)
 	g_assert_not_reached ();
 }
 
-static DBusGProxy *create_manager (DBusGConnection **ret_conn, GMainLoop **ret_loop)
+static DBusGProxy *create_manager (pam_handle_t *pamh, DBusGConnection **ret_conn, GMainLoop **ret_loop)
 {
 	DBusGConnection *connection;
 	DBusConnection *conn;
@@ -186,7 +209,7 @@ static DBusGProxy *create_manager (DBusGConnection **ret_conn, GMainLoop **ret_l
 	dbus_error_init (&error);
 	conn = dbus_bus_get_private (DBUS_BUS_SYSTEM, &error);
 	if (conn == NULL) {
-		D(g_message ("Error with getting the bus: %s", error.message));
+		D(pamh, "Error with getting the bus: %s", error.message);
 		dbus_error_free (&error);
 		return NULL;
 	}
@@ -208,7 +231,7 @@ static DBusGProxy *create_manager (DBusGConnection **ret_conn, GMainLoop **ret_l
 	return manager;
 }
 
-static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager, const char *username)
+static DBusGProxy *open_device(pam_handle_t *pamh, DBusGConnection *connection, DBusGProxy *manager, const char *username)
 {
 	GError *error = NULL;
 	gchar *path;
@@ -217,17 +240,17 @@ static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager,
 	if (!dbus_g_proxy_call (manager, "GetDefaultDevice", &error,
 				G_TYPE_INVALID, DBUS_TYPE_G_OBJECT_PATH,
 				&path, G_TYPE_INVALID)) {
-		D(g_message("get_default_devices failed: %s", error->message));
+		D(pamh, "get_default_devices failed: %s", error->message);
 		g_error_free (error);
 		return NULL;
 	}
 	
 	if (path == NULL) {
-		D(g_message("No devices found\n"));
+		D(pamh, "No devices found\n");
 		return NULL;
 	}
 
-	D(g_message("Using device %s\n", path));
+	D(pamh, "Using device %s\n", path);
 
 	dev = dbus_g_proxy_new_for_name(connection,
 					"net.reactivated.Fprint",
@@ -237,7 +260,7 @@ static DBusGProxy *open_device(DBusGConnection *connection, DBusGProxy *manager,
 	g_free (path);
 
 	if (!dbus_g_proxy_call (dev, "Claim", &error, G_TYPE_STRING, username, G_TYPE_INVALID, G_TYPE_INVALID)) {
-		D(g_message("failed to claim device: %s\n", error->message));
+		D(pamh, "failed to claim device: %s\n", error->message);
 		g_error_free (error);
 		g_object_unref (dev);
 		return NULL;
@@ -261,7 +284,7 @@ static void verify_result(GObject *object, const char *result, gboolean done, gp
 	verify_data *data = user_data;
 	const char *msg;
 
-	D(g_message("Verify result: %s\n", result));
+	D(data->pamh, "Verify result: %s\n", result);
 	if (done != FALSE) {
 		data->result = g_strdup (result);
 		g_main_loop_quit (data->loop);
@@ -285,7 +308,7 @@ static void verify_finger_selected(GObject *object, const char *finger_name, gpo
 	} else {
 		msg = g_strdup_printf (fingerstr(finger_name, data->is_swipe), data->driver);
 	}
-	D(g_message ("verify_finger_selected %s", msg));
+	D(data->pamh, "verify_finger_selected %s", msg);
 	send_info_msg (data->pamh, msg);
 	g_free (msg);
 }
@@ -355,7 +378,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 		data->timed_out = FALSE;
 
 		if (!dbus_g_proxy_call (dev, "VerifyStart", &error, G_TYPE_STRING, "any", G_TYPE_INVALID, G_TYPE_INVALID)) {
-			D(g_message("VerifyStart failed: %s", error->message));
+			D(pamh, "VerifyStart failed: %s", error->message);
 			g_error_free (error);
 
 			g_source_remove (timeout_id);
@@ -403,11 +426,11 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 	return ret;
 }
 
-static void release_device(DBusGProxy *dev)
+static void release_device(pam_handle_t *pamh, DBusGProxy *dev)
 {
 	GError *error = NULL;
 	if (!dbus_g_proxy_call (dev, "Release", &error, G_TYPE_INVALID, G_TYPE_INVALID)) {
-		D(g_message ("ReleaseDevice failed: %s\n", error->message));
+		D(pamh, "ReleaseDevice failed: %s\n", error->message);
 		g_error_free (error);
 	}
 }
@@ -420,17 +443,17 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 	GMainLoop *loop;
 	int ret;
 
-	manager = create_manager (&connection, &loop);
+	manager = create_manager (pamh, &connection, &loop);
 	if (manager == NULL)
 		return PAM_AUTHINFO_UNAVAIL;
 
-	dev = open_device(connection, manager, username);
+	dev = open_device(pamh, connection, manager, username);
 	g_object_unref (manager);
 	if (!dev)
 		return PAM_AUTHINFO_UNAVAIL;
 	ret = do_verify(connection, loop, pamh, dev);
 	g_main_loop_unref (loop);
-	release_device(dev);
+	release_device(pamh, dev);
 	g_object_unref (dev);
 
 	return ret;
@@ -441,6 +464,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 {
 	const char *rhost = NULL;
 	const char *username;
+	guint i;
 	int r;
 
 	g_type_init ();
@@ -457,6 +481,13 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	r = pam_get_user(pamh, &username, NULL);
 	if (r != PAM_SUCCESS)
 		return PAM_AUTHINFO_UNAVAIL;
+
+	for (i = 0; i < argc; i++) {
+		if (argv[i] != NULL && g_str_equal (argv[i], "debug")) {
+			g_message ("debug on");
+			debug = TRUE;
+		}
+	}
 
 	r = do_auth(pamh, username);
 
