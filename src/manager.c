@@ -95,7 +95,7 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 	GSList *l;
 	gboolean in_use;
 
-	if (priv->timeout_id > 0 || !priv->no_timeout) {
+	if (priv->timeout_id > 0) {
 		g_source_remove (priv->timeout_id);
 		priv->timeout_id = 0;
 	}
@@ -110,7 +110,7 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 			num_devices_used++;
 	}
 
-	if (num_devices_used == 0 && !priv->no_timeout)
+	if (num_devices_used == 0)
 		priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, manager);
 }
 
