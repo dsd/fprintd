@@ -324,7 +324,7 @@ static gboolean verify_timeout_cb (gpointer user_data)
 	return FALSE;
 }
 
-static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev)
+static int do_verify(GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev)
 {
 	GError *error = NULL;
 	GHashTable *props;
@@ -338,9 +338,7 @@ static int do_verify(DBusGConnection *connection, GMainLoop *loop, pam_handle_t 
 	data->loop = loop;
 
 	/* Get some properties for the device */
-	p = dbus_g_proxy_new_for_name(connection,
-				      "net.reactivated.Fprint", dbus_g_proxy_get_path (dev),
-				      "org.freedesktop.DBus.Properties");
+	p = dbus_g_proxy_new_from_proxy (dev, "org.freedesktop.DBus.Properties", NULL);
 
 	if (dbus_g_proxy_call (p, "GetAll", NULL, G_TYPE_STRING, "net.reactivated.Fprint.Device", G_TYPE_INVALID,
 			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID)) {
@@ -451,7 +449,7 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 	g_object_unref (manager);
 	if (!dev)
 		return PAM_AUTHINFO_UNAVAIL;
-	ret = do_verify(connection, loop, pamh, dev);
+	ret = do_verify(loop, pamh, dev);
 	g_main_loop_unref (loop);
 	release_device(pamh, dev);
 	g_object_unref (dev);

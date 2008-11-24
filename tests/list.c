@@ -55,9 +55,7 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 		return;
 	}
 
-	p = dbus_g_proxy_new_for_name(connection,
-				      "net.reactivated.Fprint", dbus_g_proxy_get_path (dev),
-				      "org.freedesktop.DBus.Properties");
+	p = dbus_g_proxy_new_from_proxy(dev, "org.freedesktop.DBus.Properties", NULL);
 	if (!dbus_g_proxy_call (p, "GetAll", &error, G_TYPE_STRING, "net.reactivated.Fprint.Device", G_TYPE_INVALID,
 			   dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID))
 		g_error("GetAll on the Properties interface failed: %s", error->message);
