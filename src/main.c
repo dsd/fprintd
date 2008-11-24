@@ -346,12 +346,6 @@ int main(int argc, char **argv)
 	/* create the one instance of the Manager object to be shared between
 	 * all fprintd users */
 	manager = fprint_manager_new(no_timeout);
-	error = fprint_manager_get_error (manager);
-	if (error != NULL) {
-		g_error("Couldn't create manager object: %s", error->message);
-		g_error_free (error);
-		return 1;
-	}
 
 	driver_proxy = dbus_g_proxy_new_for_name(fprintd_dbus_conn,
 		DBUS_SERVICE_DBUS, DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS);

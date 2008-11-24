@@ -41,7 +41,6 @@ G_DEFINE_TYPE(FprintManager, fprint_manager, G_TYPE_OBJECT);
 
 typedef struct
 {
-	GError *last_error;
 	GSList *dev_registry;
 	gboolean no_timeout;
 	guint timeout_id;
@@ -55,8 +54,6 @@ static void fprint_manager_finalize(GObject *object)
 	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (object);
 
 	g_slist_free(priv->dev_registry);
-	if (priv->last_error)
-		g_error_free (priv->last_error);
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -123,14 +120,11 @@ fprint_manager_init (FprintManager *manager)
 	struct fp_dscv_dev *ddev;
 	int i = 0;
 
-	if (!discovered_devs) {
-		priv->last_error = g_error_new (FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
-						_("An internal error occurred in libfprint"));
-		return;
-	}
-
 	dbus_g_connection_register_g_object(fprintd_dbus_conn,
 		"/net/reactivated/Fprint/Manager", G_OBJECT(manager));
+
+	if (discovered_devs == NULL)
+		return;
 
 	while ((ddev = discovered_devs[i++]) != NULL) {
 		FprintDevice *rdev = fprint_device_new(ddev);
@@ -160,16 +154,6 @@ FprintManager *fprint_manager_new(gboolean no_timeout)
 		priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, object);
 
 	return FPRINT_MANAGER (object);
-}
-
-GError *fprint_manager_get_error(FprintManager *manager)
-{
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
-
-	if (priv->last_error == NULL)
-		return NULL;
-
-	return g_error_copy (priv->last_error);
 }
 
 static gboolean fprint_manager_get_devices(FprintManager *manager,
