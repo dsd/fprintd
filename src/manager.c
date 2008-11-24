@@ -64,7 +64,8 @@ static void fprint_manager_finalize(GObject *object)
 static void fprint_manager_class_init(FprintManagerClass *klass)
 {
 	dbus_g_object_type_install_info(FPRINT_TYPE_MANAGER,
-		&dbus_glib_fprint_manager_object_info);
+					&dbus_glib_fprint_manager_object_info);
+	dbus_g_error_domain_register (FPRINT_ERROR, FPRINT_ERROR_DBUS_INTERFACE, FPRINT_TYPE_ERROR);
 
 	g_type_class_add_private ((GObjectClass *) klass, sizeof (FprintManagerPrivate));
 
@@ -213,3 +214,30 @@ GQuark fprint_error_quark(void)
 	return quark;
 }
 
+#define ENUM_ENTRY(NAME, DESC) { NAME, "" #NAME "", DESC }
+GType
+fprint_error_get_type (void)
+{
+	static GType etype = 0;
+
+	if (etype == 0) {
+		static const GEnumValue values[] =
+		{
+			ENUM_ENTRY (FPRINT_ERROR_INTERNAL, "Internal"),
+			ENUM_ENTRY (FPRINT_ERROR_ALREADY_IN_USE, "InUse"),
+			ENUM_ENTRY (FPRINT_ERROR_DISCOVER_PRINTS, "DiscoverPrints"),
+			ENUM_ENTRY (FPRINT_ERROR_PRINT_NOT_FOUND, "PrintNotFound"),
+			ENUM_ENTRY (FPRINT_ERROR_PRINT_LOAD, "PrintLoad"),
+			ENUM_ENTRY (FPRINT_ERROR_NO_SUCH_LOADED_PRINT, "NoSuchLoadedPrint"),
+			ENUM_ENTRY (FPRINT_ERROR_CLAIM_DEVICE, "ClaimDevice"),
+			ENUM_ENTRY (FPRINT_ERROR_VERIFY_START, "VerifyStart"),
+			ENUM_ENTRY (FPRINT_ERROR_VERIFY_STOP, "VerifyStop"),
+			ENUM_ENTRY (FPRINT_ERROR_ENROLL_START, "EnrollStart"),
+			ENUM_ENTRY (FPRINT_ERROR_ENROLL_STOP, "EnrollStop"),
+			ENUM_ENTRY (FPRINT_ERROR_FAILED, "Failed"),
+			{ 0, 0, 0 }
+		};
+		etype = g_enum_register_static ("FprintError", values);
+	}
+	return etype;
+}

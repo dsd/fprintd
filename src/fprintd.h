@@ -27,10 +27,14 @@
 #define TIMEOUT 30
 #define FPRINT_SERVICE_NAME "net.reactivated.Fprint"
 extern DBusGConnection *fprintd_dbus_conn;
-GQuark fprint_error_quark(void);
 
 /* Errors */
+GQuark fprint_error_quark(void);
+GType fprint_error_get_type(void);
+
 #define FPRINT_ERROR fprint_error_quark()
+#define FPRINT_TYPE_ERROR fprint_error_get_type()
+#define FPRINT_ERROR_DBUS_INTERFACE "net.reactivated.Fprint.Error"
 typedef enum {
 	FPRINT_ERROR_INTERNAL,
 	FPRINT_ERROR_ALREADY_IN_USE,
