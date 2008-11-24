@@ -50,35 +50,6 @@
 
 static gboolean debug = FALSE;
 
-enum fp_verify_result {
-	VERIFY_NO_MATCH = 0,
-	VERIFY_MATCH = 1,
-	VERIFY_RETRY = 100,
-	VERIFY_RETRY_TOO_SHORT = 101,
-	VERIFY_RETRY_CENTER_FINGER = 102,
-	VERIFY_RETRY_REMOVE_FINGER = 103,
-};
-
-static const char *verify_result_str(int result)
-{
-	switch (result) {
-	case VERIFY_NO_MATCH:
-		return "No match";
-	case VERIFY_MATCH:
-		return "Match!";
-	case VERIFY_RETRY:
-		return "Retry scan";
-	case VERIFY_RETRY_TOO_SHORT:
-		return "Swipe too short, please retry";
-	case VERIFY_RETRY_CENTER_FINGER:
-		return "Finger not centered, please retry";
-	case VERIFY_RETRY_REMOVE_FINGER:
-		return "Please remove finger and retry";
-	default:
-		return "Unknown";
-	}
-}
-
 static gboolean send_info_msg(pam_handle_t *pamh, const char *msg)
 {
 	const struct pam_message mymsg = {
