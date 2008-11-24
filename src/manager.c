@@ -185,6 +185,8 @@ static gboolean fprint_manager_get_default_device(FprintManager *manager,
 		*device = get_device_path (elem->data);
 		return TRUE;
 	} else {
+		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_DEVICE,
+			     "No devices available");
 		*device = NULL;
 		return FALSE;
 	}
@@ -214,6 +216,7 @@ fprint_error_get_type (void)
 			ENUM_ENTRY (FPRINT_ERROR_NO_ENROLLED_PRINTS, "NoEnrolledPrints"),
 			ENUM_ENTRY (FPRINT_ERROR_NO_ACTION_IN_PROGRESS, "NoActionInProgress"),
 			ENUM_ENTRY (FPRINT_ERROR_INVALID_FINGERNAME, "InvalidFingername"),
+			ENUM_ENTRY (FPRINT_ERROR_NO_SUCH_DEVICE, "NoSuchDevice"),
 			{ 0, 0, 0 }
 		};
 		etype = g_enum_register_static ("FprintError", values);

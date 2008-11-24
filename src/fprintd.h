@@ -43,6 +43,7 @@ typedef enum {
 	FPRINT_ERROR_NO_ENROLLED_PRINTS, /* No prints are enrolled */
 	FPRINT_ERROR_NO_ACTION_IN_PROGRESS, /* No actions currently in progress */
 	FPRINT_ERROR_INVALID_FINGERNAME, /* the finger name passed was invalid */
+	FPRINT_ERROR_NO_SUCH_DEVICE, /* device does not exist */
 } FprintError;
 
 /* Manager */
