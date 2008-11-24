@@ -110,6 +110,11 @@ struct FprintDevicePrivate {
 	/* Hashtable of connected clients */
 	GHashTable *clients;
 
+	/* The data passed to fp_async_verify_start or
+	 * fp_async_identify_start */
+	struct fp_print_data *verify_data;
+	struct fp_print_data **identify_data;
+
 	/* whether we're running an identify, or a verify */
 	FprintDeviceAction current_action;
 };
@@ -773,6 +778,7 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 		      void *user_data)
 {
 	struct FprintDevice *rdev = user_data;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	const char *name = verify_result_to_name (r);
 	gboolean done = FALSE;
 
@@ -782,12 +788,18 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 		done = TRUE;
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, done);
 	fp_img_free(img);
+
+	if (done && priv->verify_data) {
+		fp_print_data_free (priv->verify_data);
+		priv->verify_data = NULL;
+	}
 }
 
 static void identify_cb(struct fp_dev *dev, int r,
 			 size_t match_offset, struct fp_img *img, void *user_data)
 {
 	struct FprintDevice *rdev = user_data;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	const char *name = verify_result_to_name (r);
 	gboolean done = FALSE;
 
@@ -797,6 +809,14 @@ static void identify_cb(struct fp_dev *dev, int r,
 		done = TRUE;
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, done);
 	fp_img_free(img);
+
+	if (done && priv->identify_data != NULL) {
+		guint i;
+		for (i = 0; priv->identify_data[i] != NULL; i++)
+			fp_print_data_free(priv->identify_data[i]);
+		g_free (priv->identify_data);
+		priv->identify_data = NULL;
+	}
 }
 
 static void fprint_device_verify_start(FprintDevice *rdev,
@@ -882,7 +902,6 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		priv->current_action = ACTION_IDENTIFY;
 
 		g_message ("start identification device %d", priv->id);
-		//FIXME we're supposed to free the gallery here?
 		r = fp_async_identify_start (priv->dev, gallery, identify_cb, rdev);
 	} else {
 		priv->current_action = ACTION_VERIFY;
@@ -899,7 +918,6 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			return;
 		}
 
-		/* FIXME fp_async_verify_start should copy the fp_print_data */
 		r = fp_async_verify_start(priv->dev, data, verify_cb, rdev);
 	}
 
@@ -923,6 +941,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		dbus_g_method_return_error(context, error);
 		return;
 	}
+	priv->verify_data = data;
+	priv->identify_data = gallery;
 
 	dbus_g_method_return(context);
 }
@@ -955,8 +975,19 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 	}
 
 	if (priv->current_action == ACTION_VERIFY) {
+		if (priv->verify_data) {
+			fp_print_data_free (priv->verify_data);
+			priv->verify_data = NULL;
+		}
 		r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
 	} else if (priv->current_action == ACTION_IDENTIFY) {
+		if (priv->identify_data != NULL) {
+			guint i;
+			for (i = 0; priv->identify_data[i] != NULL; i++)
+				fp_print_data_free(priv->identify_data[i]);
+			g_free (priv->identify_data);
+			priv->identify_data = NULL;
+		}
 		r = fp_async_identify_stop(priv->dev, identify_stop_cb, context);
 	} else {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,

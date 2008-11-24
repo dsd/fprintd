@@ -7,9 +7,6 @@ Register fprintd' po file with Transifex, Rosetta or the Translation Project
 
 Support insertion/removal of devices
 
-Fix memory leaks with print data/gallery when using the verify_async and
-identify_async
-
 Add some hardware protection by making sure devices aren't opened and
 reading for more than a certain amount of time.
 
