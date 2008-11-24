@@ -257,11 +257,7 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 
 GSList *file_storage_discover_prints(struct fp_dscv_dev *dev, const char *username)
 {
-	//GDir *dir;
-	//const gchar *ent;
-	//GError *err = NULL;
 	GSList *list = NULL;
-	//GSList *elem;
 	char *base_store = NULL;
 	char *storedir = NULL;
 	int r;
@@ -276,7 +272,6 @@ GSList *file_storage_discover_prints(struct fp_dscv_dev *dev, const char *userna
 	storedir = get_path_to_storedir(fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
 		fp_dscv_dev_get_devtype(dev), base_store);
 
-	g_message("Entering %s", storedir);
 	list = scan_dev_storedir(storedir, fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
 		fp_dscv_dev_get_devtype(dev), list);
 

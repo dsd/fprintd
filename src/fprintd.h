@@ -36,18 +36,13 @@ GType fprint_error_get_type(void);
 #define FPRINT_TYPE_ERROR fprint_error_get_type()
 #define FPRINT_ERROR_DBUS_INTERFACE "net.reactivated.Fprint.Error"
 typedef enum {
-	FPRINT_ERROR_INTERNAL,
-	FPRINT_ERROR_ALREADY_IN_USE,
-	FPRINT_ERROR_DISCOVER_PRINTS,
-	FPRINT_ERROR_PRINT_NOT_FOUND,
-	FPRINT_ERROR_PRINT_LOAD,
-	FPRINT_ERROR_NO_SUCH_LOADED_PRINT,
-	FPRINT_ERROR_CLAIM_DEVICE,
-	FPRINT_ERROR_VERIFY_START,
-	FPRINT_ERROR_VERIFY_STOP,
-	FPRINT_ERROR_ENROLL_START,
-	FPRINT_ERROR_ENROLL_STOP,
-	FPRINT_ERROR_FAILED,
+	FPRINT_ERROR_CLAIM_DEVICE, /* developer didn't claim the device */
+	FPRINT_ERROR_ALREADY_IN_USE, /* device is already claimed by somebody else */
+	FPRINT_ERROR_INTERNAL, /* internal error occured */
+	FPRINT_ERROR_PERMISSION_DENIED, /* PolicyKit refused the action */
+	FPRINT_ERROR_NO_ENROLLED_PRINTS, /* No prints are enrolled */
+	FPRINT_ERROR_NO_ACTION_IN_PROGRESS, /* No actions currently in progress */
+	FPRINT_ERROR_INVALID_FINGERNAME, /* the finger name passed was invalid */
 } FprintError;
 
 /* Manager */

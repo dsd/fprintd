@@ -1,4 +1,15 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE node PUBLIC
+"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd" [
+<!ENTITY ERROR_CLAIM_DEVICE "net.reactivated.Fprint.Error.ClaimDevice">
+<!ENTITY ERROR_ALREADY_IN_USE "net.reactivated.Fprint.Error.AlreadyInUse">
+<!ENTITY ERROR_INTERNAL "net.reactivated.Fprint.Error.Internal">
+<!ENTITY ERROR_PERMISSION_DENIED "net.reactivated.Fprint.Error.PermissionDenied">
+<!ENTITY ERROR_NO_ENROLLED_PRINTS "net.reactivated.Fprint.Error.NoEnrolledPrints">
+<!ENTITY ERROR_NO_ACTION_IN_PROGRESS "net.reactivated.Fprint.Error.NoActionInProgress">
+<!ENTITY ERROR_INVALID_FINGERNAME "net.reactivated.Fprint.Error.InvalidFingername">
+]>
+
 <node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
 	<interface name="net.reactivated.Fprint.Device">
 		<annotation name="org.freedesktop.DBus.GLib.CSymbol"
@@ -256,6 +267,11 @@
 						List all the enrolled fingerprints for the chosen user.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+					<doc:error name="&ERROR_NO_ENROLLED_PRINTS;">if the chosen user doesn't have any fingerprints enrolled</doc:error>
+				</doc:errors>
 			</doc:doc>
 		</method>
 
@@ -273,6 +289,10 @@
 						Delete all the enrolled fingerprints for the chosen user.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+				</doc:errors>
 			</doc:doc>
 		</method>
 
@@ -290,6 +310,12 @@
 						Claim the device for the chosen user.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+					<doc:error name="&ERROR_ALREADY_IN_USE;">if the device is already claimed</doc:error>
+					<doc:error name="&ERROR_INTERNAL;">if the device couldn't be claimed</doc:error>
+				</doc:errors>
 			</doc:doc>
 		</method>
 
@@ -304,6 +330,11 @@
 						Release a device claimed with <doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref>.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+					<doc:error name="&ERROR_CLAIM_DEVICE;">if the device was not claimed</doc:error>
+				</doc:errors>
 			</doc:doc>
 		</method>
 
@@ -319,9 +350,19 @@
 				<doc:description>
 					<doc:para>
 						Check the chosen finger against a saved fingerprint. You need to have claimed the device using
-						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref>.
+						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref>. The finger selected is sent to the front-end
+						using <doc:ref type="signal" to="Device::VerifyFingerSelected">Device::VerifyFingerSelected</doc:ref> and
+						verification status through <doc:ref type="signal" to="Device::VerifyStatus">Device::VerifyStatus</doc:ref>.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+					<doc:error name="&ERROR_CLAIM_DEVICE;">if the device was not claimed</doc:error>
+					<doc:error name="&ERROR_ALREADY_IN_USE;">if the device was already being used</doc:error>
+					<doc:error name="&ERROR_NO_ENROLLED_PRINTS;">if there are no enrolled prints for the chosen user</doc:error>
+					<doc:error name="&ERROR_INTERNAL;">if there was an internal error</doc:error>
+				</doc:errors>
 			</doc:doc>
 		</method>
 
@@ -336,6 +377,13 @@
 						Stop an on-going fingerprint verification started with <doc:ref type="method" to="Device.VerifyStart">Device.VerifyStart</doc:ref>.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+					<doc:error name="&ERROR_CLAIM_DEVICE;">if the device was not claimed</doc:error>
+					<doc:error name="&ERROR_NO_ACTION_IN_PROGRESS;">if there was no ongoing verification</doc:error>
+					<doc:error name="&ERROR_INTERNAL;">if there was an internal error</doc:error>
+				</doc:errors>
 			</doc:doc>
 		</method>
 
@@ -364,7 +412,7 @@
 			<arg type="s" name="result">
 				<doc:doc>
 					<doc:summary>
-						A string representing the status of the verification status.
+						A string representing the status of the verification.
 					</doc:summary>
 				</doc:doc>
 			</arg>
@@ -399,9 +447,18 @@
 					<doc:para>
 						Start enrollemnt for the selected finger. You need to have claimed the device using
 						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref> before calling
-						this method.
+						this method. Enrollment status is sent through <doc:ref type="signal" to="Device::EnrollStatus">Device::EnrollStatus</doc:ref>.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+					<doc:error name="&ERROR_CLAIM_DEVICE;">if the device was not claimed</doc:error>
+					<doc:error name="&ERROR_ALREADY_IN_USE;">if the device was already being used</doc:error>
+					<doc:error name="&ERROR_INVALID_FINGERNAME;">if there are no enrolled prints for the chosen user</doc:error>
+					<doc:error name="&ERROR_INTERNAL;">if there was an internal error</doc:error>
+				</doc:errors>
+
 			</doc:doc>
 		</method>
 
@@ -416,6 +473,13 @@
 						Stop an on-going fingerprint enrollment started with <doc:ref type="method" to="Device.EnrollStart">Device.EnrollStart</doc:ref>.
 					</doc:para>
 				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+					<doc:error name="&ERROR_CLAIM_DEVICE;">if the device was not claimed</doc:error>
+					<doc:error name="&ERROR_NO_ACTION_IN_PROGRESS;">if there was no ongoing verification</doc:error>
+					<doc:error name="&ERROR_INTERNAL;">if there was an internal error</doc:error>
+				</doc:errors>
 			</doc:doc>
 		</method>
 
@@ -425,7 +489,7 @@
 			<arg type="s" name="result">
 				<doc:doc>
 					<doc:summary>
-						A string representing the status of the enrollment status.
+						A string representing the status of the enrollment.
 					</doc:summary>
 				</doc:doc>
 			</arg>

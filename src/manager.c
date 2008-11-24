@@ -207,18 +207,13 @@ fprint_error_get_type (void)
 	if (etype == 0) {
 		static const GEnumValue values[] =
 		{
-			ENUM_ENTRY (FPRINT_ERROR_INTERNAL, "Internal"),
-			ENUM_ENTRY (FPRINT_ERROR_ALREADY_IN_USE, "InUse"),
-			ENUM_ENTRY (FPRINT_ERROR_DISCOVER_PRINTS, "DiscoverPrints"),
-			ENUM_ENTRY (FPRINT_ERROR_PRINT_NOT_FOUND, "PrintNotFound"),
-			ENUM_ENTRY (FPRINT_ERROR_PRINT_LOAD, "PrintLoad"),
-			ENUM_ENTRY (FPRINT_ERROR_NO_SUCH_LOADED_PRINT, "NoSuchLoadedPrint"),
 			ENUM_ENTRY (FPRINT_ERROR_CLAIM_DEVICE, "ClaimDevice"),
-			ENUM_ENTRY (FPRINT_ERROR_VERIFY_START, "VerifyStart"),
-			ENUM_ENTRY (FPRINT_ERROR_VERIFY_STOP, "VerifyStop"),
-			ENUM_ENTRY (FPRINT_ERROR_ENROLL_START, "EnrollStart"),
-			ENUM_ENTRY (FPRINT_ERROR_ENROLL_STOP, "EnrollStop"),
-			ENUM_ENTRY (FPRINT_ERROR_FAILED, "Failed"),
+			ENUM_ENTRY (FPRINT_ERROR_ALREADY_IN_USE, "AlreadyInUse"),
+			ENUM_ENTRY (FPRINT_ERROR_INTERNAL, "Internal"),
+			ENUM_ENTRY (FPRINT_ERROR_PERMISSION_DENIED, "PermissionDenied"),
+			ENUM_ENTRY (FPRINT_ERROR_NO_ENROLLED_PRINTS, "NoEnrolledPrints"),
+			ENUM_ENTRY (FPRINT_ERROR_NO_ACTION_IN_PROGRESS, "NoActionInProgress"),
+			ENUM_ENTRY (FPRINT_ERROR_INVALID_FINGERNAME, "InvalidFingername"),
 			{ 0, 0, 0 }
 		};
 		etype = g_enum_register_static ("FprintError", values);
