@@ -1,0 +1,26 @@
+PAM module for fingerprint authentication
+-----------------------------------------
+
+Using:
+* Modify the appropriate PAM configuration file
+(/etc/pam.d/system-auth-ac on Fedora systems), and add the line:
+auth        sufficient    pam_fprintd.so
+before the line:
+auth        sufficient    pam_unix.so ...
+* You can now enroll fingerprints using fprintd-enroll. The first available
+  fingerprint available will be used to log you in.
+
+Options:
+* You can add the "debug" option on the pam configuration file line above,
+  this will log more information from PAM to the file specified in your
+  syslog configuration (/var/log/secure by default on Fedora)
+
+Known issues:
+* pam_fprintd does not support identifying the user itself as
+  that would mean having the fingerprint reader on for all the time
+  the user selection is displayed, and could damage the hardware.
+  It could be fixed by having gdm/login only start the PAM conversation
+  when there is activity
+* pam_fprintd doesn't support entering either the password or a fingerprint,
+  as pam_thinkfinger does, because it's a gross hack, and could be fixed
+  by having the login managers run 2 separate PAM stacks
