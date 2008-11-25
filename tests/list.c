@@ -47,18 +47,22 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 	DBusGProxy *p;
 	guint i;
 
-	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, username, &fingers, &error))
-		g_error("ListEnrolledFingers failed: %s", error->message);
-
-	if (fingers == NULL || g_strv_length (fingers) == 0) {
-		g_print("User %s has no fingers enrolled for this device.\n", username);
-		return;
+	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, username, &fingers, &error)) {
+		if (dbus_g_error_has_name (error, "net.reactivated.Fprint.Error.NoEnrolledPrints") == FALSE)
+			g_error("ListEnrolledFingers failed: %s", error->message);
+		else
+			fingers = NULL;
 	}
 
 	p = dbus_g_proxy_new_from_proxy(dev, "org.freedesktop.DBus.Properties", NULL);
 	if (!dbus_g_proxy_call (p, "GetAll", &error, G_TYPE_STRING, "net.reactivated.Fprint.Device", G_TYPE_INVALID,
 			   dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID))
 		g_error("GetAll on the Properties interface failed: %s", error->message);
+
+	if (fingers == NULL || g_strv_length (fingers) == 0) {
+		g_print("User %s has no fingers enrolled for %s.\n", username, g_value_get_string (g_hash_table_lookup (props, "name")));
+		return;
+	}
 
 	g_print("Fingerprints for user %s on %s (%s):\n",
 		username,
