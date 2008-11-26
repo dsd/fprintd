@@ -97,7 +97,7 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 		g_source_remove (priv->timeout_id);
 		priv->timeout_id = 0;
 	}
-	if (!priv->no_timeout)
+	if (priv->no_timeout)
 		return;
 
 	for (l = priv->dev_registry; l != NULL; l = l->next) {
