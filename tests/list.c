@@ -1,5 +1,5 @@
 /*
- * fprintd example to verify a fingerprint
+ * fprintd example to list enrolled fingerprints
  * Copyright (C) 2008 Daniel Drake <dsd@gentoo.org>
  *
  * This program is free software; you can redistribute it and/or modify
