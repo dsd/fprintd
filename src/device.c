@@ -117,6 +117,8 @@ struct FprintDevicePrivate {
 
 	/* whether we're running an identify, or a verify */
 	FprintDeviceAction current_action;
+	/* Whether we should ignore new signals on the device */
+	gboolean action_done;
 };
 
 typedef struct FprintDevicePrivate FprintDevicePrivate;
@@ -780,16 +782,18 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	const char *name = verify_result_to_name (r);
-	gboolean done = FALSE;
+
+	if (priv->action_done != FALSE)
+		return;
 
 	g_message("verify_cb: result %s (%d)", name, r);
 
 	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
-		done = TRUE;
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, done);
+		priv->action_done = TRUE;
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
 	fp_img_free(img);
 
-	if (done && priv->verify_data) {
+	if (priv->action_done && priv->verify_data) {
 		fp_print_data_free (priv->verify_data);
 		priv->verify_data = NULL;
 	}
@@ -801,16 +805,18 @@ static void identify_cb(struct fp_dev *dev, int r,
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	const char *name = verify_result_to_name (r);
-	gboolean done = FALSE;
+
+	if (priv->action_done != FALSE)
+		return;
 
 	g_message("identify_cb: result %s (%d)", name, r);
 
 	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
-		done = TRUE;
-	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, done);
+		priv->action_done = TRUE;
+	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
 	fp_img_free(img);
 
-	if (done && priv->identify_data != NULL) {
+	if (priv->action_done && priv->identify_data != NULL) {
 		guint i;
 		for (i = 0; priv->identify_data[i] != NULL; i++)
 			fp_print_data_free(priv->identify_data[i]);
@@ -853,6 +859,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		g_error_free (error);
 		return;
 	}
+	priv->action_done = FALSE;
 
 	if (finger_num == -1) {
 		GSList *prints;
@@ -1013,8 +1020,11 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
-	gboolean done = FALSE;
 	int r;
+
+	/* We're done, ignore new events for the action */
+	if (priv->action_done != FALSE)
+		return;
 
 	g_message("enroll_stage_cb: result %d", result);
 	if (result == FP_ENROLL_COMPLETE) {
@@ -1024,8 +1034,10 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 	}
 
 	if (result == FP_ENROLL_COMPLETE || result == FP_ENROLL_FAIL || result < 0)
-		done = TRUE;
-	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, enroll_result_to_name (result), done);
+		priv->action_done = TRUE;
+
+	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, enroll_result_to_name (result), priv->action_done);
+
 	fp_img_free(img);
 	fp_print_data_free(print);
 }
@@ -1072,6 +1084,7 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 
 	g_message("start enrollment device %d finger %d", priv->id, finger_num);
 	session->enroll_finger = finger_num;
+	priv->action_done = FALSE;
 	
 	r = fp_async_enroll_start(priv->dev, enroll_stage_cb, rdev);
 	if (r < 0) {
