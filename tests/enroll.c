@@ -72,7 +72,6 @@ static void enroll_result(GObject *object, const char *result, gboolean done, vo
 	g_print("Enroll result: %s\n", result);
 	if (done != FALSE)
 		*enroll_completed = TRUE;
-		*enroll_completed = TRUE;
 }
 
 static void do_enroll(DBusGProxy *dev)
