@@ -1,4 +1,4 @@
-BUILT_SOURCES = manager-dbus-glue.h device-dbus-glue.h $(MARSHALFILES)
+BUILT_SOURCES = manager-dbus-glue.h device-dbus-glue.h $(MARSHALFILES) $(interfaces_DATA)
 noinst_HEADERS = $(BUILT_SOURCES)
 
 CLEANFILES = $(BUILT_SOURCES)
@@ -21,6 +21,13 @@ fprintd_SOURCES =				\
 	main.c					\
 	file_storage.c file_storage.h storage.h
 fprintd_LDADD = libfprintd.la
+
+interfaces_DATA = net.reactivated.Fprint.Manager.xml net.reactivated.Fprint.Device.xml
+net.reactivated.Fprint.Manager.xml: manager.xml
+	cat $< > $@
+net.reactivated.Fprint.Device.xml: device.xml
+	cat $< > $@
+interfacesdir = $(datadir)/dbus-1/interfaces/
 
 manager-dbus-glue.h: manager.xml
 	dbus-binding-tool --prefix=fprint_manager --mode=glib-server $< --output=$@
