@@ -370,12 +370,17 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 
 	dev = open_device(pamh, connection, manager, username);
 	g_object_unref (manager);
-	if (!dev)
+	if (!dev) {
+		g_main_loop_unref (loop);
+		dbus_g_connection_unref (connection);
 		return PAM_AUTHINFO_UNAVAIL;
+	}
 	ret = do_verify(loop, pamh, dev);
+
 	g_main_loop_unref (loop);
 	release_device(pamh, dev);
 	g_object_unref (dev);
+	dbus_g_connection_unref (connection);
 
 	return ret;
 }
