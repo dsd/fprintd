@@ -154,6 +154,15 @@ static DBusGProxy *create_manager (pam_handle_t *pamh, DBusGConnection **ret_con
 	return manager;
 }
 
+static close_and_unref (DBusGConnection *connection)
+{
+	DBusConnection *conn;
+
+	conn = dbus_g_connection_get_connection (connection);
+	dbus_connection_close (conn);
+	dbus_g_connection_unref (connection);
+}
+
 static DBusGProxy *open_device(pam_handle_t *pamh, DBusGConnection *connection, DBusGProxy *manager, const char *username)
 {
 	GError *error = NULL;
@@ -372,7 +381,7 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 	g_object_unref (manager);
 	if (!dev) {
 		g_main_loop_unref (loop);
-		dbus_g_connection_unref (connection);
+		close_and_unref (connection);
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 	ret = do_verify(loop, pamh, dev);
@@ -380,7 +389,7 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 	g_main_loop_unref (loop);
 	release_device(pamh, dev);
 	g_object_unref (dev);
-	dbus_g_connection_unref (connection);
+	close_and_unref (connection);
 
 	return ret;
 }
