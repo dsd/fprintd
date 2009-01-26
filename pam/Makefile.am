@@ -19,4 +19,4 @@ marshal.c: marshal.h
 
 endif
 
-EXTRA_DIST = pam_fprintd.c
+EXTRA_DIST = pam_fprintd.c fingerprint-strings.h

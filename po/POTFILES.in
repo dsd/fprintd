@@ -2,3 +2,4 @@ data/net.reactivated.fprint.device.policy.in
 src/main.c
 src/manager.c
 src/device.c
+pam/fingerprint-strings.h
