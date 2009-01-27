@@ -183,6 +183,12 @@
 						</doc:definition>
 					</doc:item>
 					<doc:item>
+						<doc:term>verify-disconnected</doc:term>
+						<doc:definition>
+							The device was disconnected during the verification, no other actions should be taken, and you shouldn't use the device any more.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
 						<doc:term>verify-unknown-error</doc:term>
 						<doc:definition>
 							An unknown error occurred (usually a driver problem), <doc:ref type="method" to="Device.VerifyStop">Device.VerifyStop</doc:ref> should now be called.
@@ -237,6 +243,13 @@
 						<doc:term>enroll-remove-and-retry</doc:term>
 						<doc:definition>
 							The user should remove their finger from the reader and retry scanning their finger, the enrollment is still ongoing.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
+						<doc:term>enroll-disconnected</doc:term>
+						<doc:definition>
+							The device was disconnected during the enrollment, no other actions should be taken, and you shouldn't use the device any more.
+
 						</doc:definition>
 					</doc:item>
 					<doc:item>

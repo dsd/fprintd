@@ -154,7 +154,7 @@ static DBusGProxy *create_manager (pam_handle_t *pamh, DBusGConnection **ret_con
 	return manager;
 }
 
-static close_and_unref (DBusGConnection *connection)
+static void close_and_unref (DBusGConnection *connection)
 {
 	DBusConnection *conn;
 
@@ -335,7 +335,11 @@ static int do_verify(GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev)
 				ret = PAM_SUCCESS;
 			else if (g_str_equal (data->result, "verify-unknown-error"))
 				ret = PAM_AUTHINFO_UNAVAIL;
-			else {
+			else if (g_str_equal (data->result, "verify-disconnected")) {
+				ret = PAM_AUTHINFO_UNAVAIL;
+				g_free (data->result);
+				break;
+			} else {
 				send_info_msg (data->pamh, "An unknown error occured");
 				ret = PAM_AUTH_ERR;
 				g_free (data->result);

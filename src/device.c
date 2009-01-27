@@ -28,6 +28,7 @@
 
 #include <sys/types.h>
 #include <pwd.h>
+#include <errno.h>
 
 #include "fprintd-marshal.h"
 #include "fprintd.h"
@@ -119,6 +120,8 @@ struct FprintDevicePrivate {
 	FprintDeviceAction current_action;
 	/* Whether we should ignore new signals on the device */
 	gboolean action_done;
+	/* Whether the device was disconnected */
+	gboolean disconnected;
 };
 
 typedef struct FprintDevicePrivate FprintDevicePrivate;
@@ -368,6 +371,8 @@ verify_result_to_name (int result)
 		return "verify-finger-not-centered";
 	case FP_VERIFY_RETRY_REMOVE_FINGER:
 		return "verify-remove-and-retry";
+	case -EPROTO:
+		return "verify-disconnected";
 	default:
 		return "verify-unknown-error";
 	}
@@ -391,9 +396,19 @@ enroll_result_to_name (int result)
 		return "enroll-finger-not-centered";
 	case FP_ENROLL_RETRY_REMOVE_FINGER:
 		return "enroll-remove-and-retry";
+	case -EPROTO:
+		return "enroll-disconnected";
 	default:
 		return "enroll-unknown-error";
 	}
+}
+
+static void
+set_disconnected (FprintDevicePrivate *priv, const char *res)
+{
+	if (g_str_equal (res, "enroll-disconnected") ||
+	    g_str_equal (res, "verify-disconnected"))
+		priv->disconnected = TRUE;
 }
 
 static gboolean
@@ -790,6 +805,7 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 
 	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
 		priv->action_done = TRUE;
+	set_disconnected (priv, name);
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
 	fp_img_free(img);
 
@@ -813,6 +829,7 @@ static void identify_cb(struct fp_dev *dev, int r,
 
 	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
 		priv->action_done = TRUE;
+	set_disconnected (priv, name);
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
 	fp_img_free(img);
 
@@ -986,7 +1003,10 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 			fp_print_data_free (priv->verify_data);
 			priv->verify_data = NULL;
 		}
-		r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
+		if (!priv->disconnected)
+			r = fp_async_verify_stop(priv->dev, verify_stop_cb, context);
+		else
+			r = 0;
 	} else if (priv->current_action == ACTION_IDENTIFY) {
 		if (priv->identify_data != NULL) {
 			guint i;
@@ -995,7 +1015,10 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 			g_free (priv->identify_data);
 			priv->identify_data = NULL;
 		}
-		r = fp_async_identify_stop(priv->dev, identify_stop_cb, context);
+		if (!priv->disconnected)
+			r = fp_async_identify_stop(priv->dev, identify_stop_cb, context);
+		else
+			r = 0;
 	} else {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
 			    "No verification in progress");
@@ -1010,6 +1033,8 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		dbus_g_method_return_error(context, error);
 		g_error_free (error);
 	}
+	if (priv->disconnected)
+		dbus_g_method_return(context);
 
 	priv->current_action = ACTION_NONE;
 }
@@ -1020,6 +1045,7 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	struct session_data *session = priv->session;
+	const char *name = enroll_result_to_name (result);
 	int r;
 
 	/* We're done, ignore new events for the action */
@@ -1035,8 +1061,9 @@ static void enroll_stage_cb(struct fp_dev *dev, int result,
 
 	if (result == FP_ENROLL_COMPLETE || result == FP_ENROLL_FAIL || result < 0)
 		priv->action_done = TRUE;
+	set_disconnected (priv, name);
 
-	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, enroll_result_to_name (result), priv->action_done);
+	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, name, priv->action_done);
 
 	fp_img_free(img);
 	fp_print_data_free(print);
@@ -1129,13 +1156,18 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 		return;
 	}
 
-	r = fp_async_enroll_stop(priv->dev, enroll_stop_cb, context);
+	if (!priv->disconnected)
+		r = fp_async_enroll_stop(priv->dev, enroll_stop_cb, context);
+	else
+		r = 0;
 	if (r < 0) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
 			"Enroll stop failed with error %d", r);
 		dbus_g_method_return_error(context, error);
 		g_error_free (error);
 	}
+	if (priv->disconnected)
+		dbus_g_method_return(context);
 
 	priv->current_action = ACTION_NONE;
 }
