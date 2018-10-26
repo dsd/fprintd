@@ -340,7 +340,7 @@ static int do_verify(GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev)
 				g_free (data->result);
 				break;
 			} else {
-				send_info_msg (data->pamh, "An unknown error occured");
+				send_info_msg (data->pamh, "An unknown error occurred");
 				ret = PAM_AUTH_ERR;
 				g_free (data->result);
 				break;
